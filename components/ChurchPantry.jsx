@@ -1,47 +1,12 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { supabase } from "../lib/supabase";
 
 const CATEGORIES = ["Canned Goods","Grains & Pasta","Dairy","Produce","Meat & Protein","Snacks","Beverages","Baby & Infant","Hygiene","Condiments","Baking","Frozen"];
 
-const SAMPLE_INVENTORY = [
-  {id:"i1",upc:"041000000001",name:"Green Beans (canned)",category:"Canned Goods",qty:48,price:1.29,expiry:"2026-06-15",addedBy:"Sarah M.",addedDate:"2026-03-20",location:"Shelf A2"},
-  {id:"i2",upc:"041000000002",name:"Peanut Butter 16oz",category:"Snacks",qty:24,price:3.49,expiry:"2027-01-10",addedBy:"James R.",addedDate:"2026-03-18",location:"Shelf B1"},
-  {id:"i3",upc:"041000000003",name:"White Rice 2lb",category:"Grains & Pasta",qty:36,price:2.99,expiry:"2027-08-01",addedBy:"Sarah M.",addedDate:"2026-03-15",location:"Shelf C3"},
-  {id:"i4",upc:"041000000004",name:"Chicken Broth 32oz",category:"Canned Goods",qty:18,price:2.49,expiry:"2026-04-20",addedBy:"Tom K.",addedDate:"2026-02-10",location:"Shelf A1"},
-  {id:"i5",upc:"041000000005",name:"Whole Wheat Pasta",category:"Grains & Pasta",qty:30,price:1.79,expiry:"2027-03-15",addedBy:"Maria L.",addedDate:"2026-03-22",location:"Shelf C2"},
-  {id:"i6",upc:"041000000006",name:"Baby Formula 12oz",category:"Baby & Infant",qty:8,price:18.99,expiry:"2026-05-30",addedBy:"Sarah M.",addedDate:"2026-03-25",location:"Shelf D1"},
-  {id:"i7",upc:"041000000007",name:"Canned Tuna",category:"Meat & Protein",qty:42,price:1.59,expiry:"2028-01-01",addedBy:"James R.",addedDate:"2026-03-10",location:"Shelf A3"},
-  {id:"i8",upc:"041000000008",name:"Instant Oatmeal Box",category:"Grains & Pasta",qty:15,price:3.99,expiry:"2026-09-15",addedBy:"Tom K.",addedDate:"2026-03-28",location:"Shelf C1"},
-  {id:"i9",upc:"041000000009",name:"Toothpaste",category:"Hygiene",qty:20,price:2.49,expiry:"2027-12-01",addedBy:"Maria L.",addedDate:"2026-03-30",location:"Shelf E1"},
-  {id:"i10",upc:"041000000010",name:"Apple Juice 64oz",category:"Beverages",qty:12,price:3.29,expiry:"2026-07-20",addedBy:"Sarah M.",addedDate:"2026-04-01",location:"Shelf B3"},
-  {id:"i11",upc:"041000000011",name:"Mac & Cheese Box",category:"Grains & Pasta",qty:55,price:1.09,expiry:"2027-04-10",addedBy:"James R.",addedDate:"2026-04-02",location:"Shelf C4"},
-  {id:"i12",upc:"041000000012",name:"Evaporated Milk",category:"Dairy",qty:22,price:1.89,expiry:"2026-08-18",addedBy:"Tom K.",addedDate:"2026-04-03",location:"Shelf A4"},
-];
-
-const SAMPLE_DONORS = [
-  {id:"d1",name:"Grace Baptist Women's Group",type:"Organization",totalDonations:12,lastDonation:"2026-03-28",totalValue:847.50,email:"grace.womens@email.com"},
-  {id:"d2",name:"Johnson Family",type:"Family",totalDonations:6,lastDonation:"2026-04-01",totalValue:324.00,email:"johnson.fam@email.com"},
-  {id:"d3",name:"Walmart Community Grant",type:"Corporate",totalDonations:3,lastDonation:"2026-03-15",totalValue:2500.00,email:"community@walmart.com"},
-  {id:"d4",name:"Mike Torres",type:"Individual",totalDonations:18,lastDonation:"2026-04-05",totalValue:1120.00,email:"mike.t@email.com"},
-];
-
-const SAMPLE_RECIPIENTS = [
-  {id:"r1",name:"Williams Family",size:5,dietaryNotes:"Nut allergy (child)",visits:8,lastVisit:"2026-04-03"},
-  {id:"r2",name:"Maria Gonzalez",size:2,dietaryNotes:"Diabetic",visits:12,lastVisit:"2026-04-06"},
-  {id:"r3",name:"Anderson Household",size:7,dietaryNotes:"",visits:4,lastVisit:"2026-03-28"},
-  {id:"r4",name:"James Cooper",size:1,dietaryNotes:"Vegetarian",visits:15,lastVisit:"2026-04-05"},
-];
-
-const SAMPLE_MESSAGES = [
-  {id:"m1",author:"Sarah M.",role:"Manager",text:"We're running very low on baby formula. If anyone has connections to suppliers, please reach out!",time:"2026-04-06T14:30:00",replies:[{id:"m1r1",author:"Tom K.",text:"I'll check with the Walmart grant contact — they've donated formula before.",time:"2026-04-06T15:10:00"}]},
-  {id:"m2",author:"James R.",role:"Volunteer",text:"Huge shoutout to the Johnson family for their donation this week! 6 bags of rice and canned goods.",time:"2026-04-05T09:00:00",replies:[]},
-  {id:"m3",author:"Maria L.",role:"Manager",text:"Easter food drive is April 12th. We need volunteers for sorting from 8am-12pm. Who's in?",time:"2026-04-04T11:20:00",replies:[{id:"m3r1",author:"James R.",text:"Count me in!",time:"2026-04-04T12:00:00"},{id:"m3r2",author:"Tom K.",text:"I can do 8-10am",time:"2026-04-04T13:45:00"}]},
-];
-
-const today = new Date("2026-04-07");
+const today = new Date();
 const daysUntil = (d) => Math.ceil((new Date(d) - today) / 86400000);
 const fmt = (d) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 const fmtCurrency = (v) => "$" + Number(v).toFixed(2);
-const uid = () => Math.random().toString(36).slice(2, 9);
 
 const BAG_RULES = {
   1:{canned:4,grains:2,protein:2,dairy:1,beverage:1,snack:1,hygiene:1},
@@ -226,6 +191,8 @@ select.fi{cursor:pointer}textarea.fi{resize:vertical;min-height:80px}
 .eo{padding:12px;border:2px solid var(--bdr);border-radius:var(--rs);cursor:pointer;text-align:center;transition:all .2s}
 .eo:hover{border-color:var(--acc)}.eo.sel{border-color:var(--acc);background:var(--acc-s)}
 
+.ld{display:flex;align-items:center;justify-content:center;padding:60px;color:var(--tx3);font-size:14px;gap:10px}
+
 @media(max-width:768px){
   .sb{display:none}.mn{margin-left:0}.tb{padding:12px 16px}.tb h2{font-size:17px}
   .ct{padding:14px 16px 120px}.sg{grid-template-columns:1fr 1fr}.bc{flex-direction:column}
@@ -238,25 +205,104 @@ select.fi{cursor:pointer}textarea.fi{resize:vertical;min-height:80px}
 
 export default function ChurchPantry() {
   const [pg, setPg] = useState("dashboard");
-  const [inv, setInv] = useState(SAMPLE_INVENTORY);
-  const [donors, setDonors] = useState(SAMPLE_DONORS);
-  const [recip, setRecip] = useState(SAMPLE_RECIPIENTS);
-  const [msgs, setMsgs] = useState(SAMPLE_MESSAGES);
+  const [inv, setInv] = useState([]);
+  const [donors, setDonors] = useState([]);
+  const [recip, setRecip] = useState([]);
+  const [msgs, setMsgs] = useState([]);
   const [sel, setSel] = useState(new Set());
   const [srch, setSrch] = useState("");
   const [modal, setModal] = useState(null);
-  const [sync, setSync] = useState("ok");
+  const [sync, setSync] = useState("pg");
   const [eFreq, setEFreq] = useState("monthly");
+  const [loading, setLoading] = useState(true);
 
+  // Load all data from Supabase on mount
   useEffect(() => {
-    const iv = setInterval(() => { setSync("pg"); setTimeout(() => setSync("ok"), 2000); }, 35000);
-    return () => clearInterval(iv);
+    async function loadData() {
+      setSync("pg");
+      try {
+        const [invRes, donRes, recRes, msgRes] = await Promise.all([
+          supabase.from("inventory").select("*").order("created_at", { ascending: false }),
+          supabase.from("donors").select("*").order("created_at", { ascending: false }),
+          supabase.from("recipients").select("*").order("created_at", { ascending: false }),
+          supabase.from("messages").select("*, replies(*)").order("created_at", { ascending: false }),
+        ]);
+
+        if (invRes.data) setInv(invRes.data.map(i => ({
+          id: i.id, upc: i.upc || "", name: i.name, category: i.category || "",
+          qty: i.qty, price: Number(i.price), expiry: i.expiry,
+          addedBy: i.added_by || "", addedDate: i.added_date || "", location: i.location || ""
+        })));
+        if (donRes.data) setDonors(donRes.data.map(d => ({
+          id: d.id, name: d.name, type: d.type || "Individual",
+          totalDonations: d.total_donations, lastDonation: d.last_donation,
+          totalValue: Number(d.total_value), email: d.email || ""
+        })));
+        if (recRes.data) setRecip(recRes.data.map(r => ({
+          id: r.id, name: r.name, size: r.size,
+          dietaryNotes: r.dietary_notes || "", visits: r.visits,
+          lastVisit: r.last_visit
+        })));
+        if (msgRes.data) setMsgs(msgRes.data.map(m => ({
+          id: m.id, author: m.author, role: m.role || "",
+          text: m.text, time: m.created_at,
+          replies: (m.replies || []).map(r => ({
+            id: r.id, author: r.author, text: r.text, time: r.created_at
+          }))
+        })));
+
+        setSync("ok");
+      } catch (err) {
+        console.error("Failed to load data:", err);
+        setSync("off");
+      }
+      setLoading(false);
+    }
+    loadData();
   }, []);
-  const doSync = () => { setSync("pg"); setTimeout(() => setSync("ok"), 2500); };
+
+  const doSync = async () => {
+    setSync("pg");
+    try {
+      const [invRes, donRes, recRes, msgRes] = await Promise.all([
+        supabase.from("inventory").select("*").order("created_at", { ascending: false }),
+        supabase.from("donors").select("*").order("created_at", { ascending: false }),
+        supabase.from("recipients").select("*").order("created_at", { ascending: false }),
+        supabase.from("messages").select("*, replies(*)").order("created_at", { ascending: false }),
+      ]);
+      if (invRes.data) setInv(invRes.data.map(i => ({
+        id: i.id, upc: i.upc || "", name: i.name, category: i.category || "",
+        qty: i.qty, price: Number(i.price), expiry: i.expiry,
+        addedBy: i.added_by || "", addedDate: i.added_date || "", location: i.location || ""
+      })));
+      if (donRes.data) setDonors(donRes.data.map(d => ({
+        id: d.id, name: d.name, type: d.type || "Individual",
+        totalDonations: d.total_donations, lastDonation: d.last_donation,
+        totalValue: Number(d.total_value), email: d.email || ""
+      })));
+      if (recRes.data) setRecip(recRes.data.map(r => ({
+        id: r.id, name: r.name, size: r.size,
+        dietaryNotes: r.dietary_notes || "", visits: r.visits,
+        lastVisit: r.last_visit
+      })));
+      if (msgRes.data) setMsgs(msgRes.data.map(m => ({
+        id: m.id, author: m.author, role: m.role || "",
+        text: m.text, time: m.created_at,
+        replies: (m.replies || []).map(r => ({
+          id: r.id, author: r.author, text: r.text, time: r.created_at
+        }))
+      })));
+      setSync("ok");
+    } catch (err) {
+      console.error("Sync failed:", err);
+      setSync("off");
+    }
+  };
 
   const notifs = useMemo(() => {
     const n = [];
     inv.forEach(item => {
+      if (!item.expiry) return;
       const d = daysUntil(item.expiry);
       if (d <= 0) n.push({ type: "ur", title: `EXPIRED: ${item.name}`, desc: `Expired ${Math.abs(d)} days ago. Remove immediately.` });
       else if (d <= 7) n.push({ type: "ur", title: `Expiring in ${d} days: ${item.name}`, desc: `${item.qty} units expire ${fmt(item.expiry)}.` });
@@ -267,18 +313,62 @@ export default function ChurchPantry() {
   }, [inv]);
 
   const urgCt = notifs.filter(n => n.type === "ur").length;
-  const fInv = inv.filter(i => i.name.toLowerCase().includes(srch.toLowerCase()) || i.upc.includes(srch) || i.category.toLowerCase().includes(srch.toLowerCase()));
+  const fInv = inv.filter(i => i.name.toLowerCase().includes(srch.toLowerCase()) || (i.upc && i.upc.includes(srch)) || (i.category && i.category.toLowerCase().includes(srch.toLowerCase())));
   const tVal = inv.reduce((s, i) => s + i.qty * i.price, 0);
   const tItems = inv.reduce((s, i) => s + i.qty, 0);
 
   const selAll = (e) => { if (e.target.checked) setSel(new Set(fInv.map(i => i.id))); else setSel(new Set()); };
   const togSel = (id) => { const n = new Set(sel); n.has(id) ? n.delete(id) : n.add(id); setSel(n); };
-  const bulkDel = () => { setInv(p => p.filter(i => !sel.has(i.id))); setSel(new Set()); doSync(); };
-  const addItem = (item) => { setInv(p => [...p, { ...item, id: uid() }]); doSync(); };
-  const bulkAdd = (items) => { setInv(p => [...p, ...items.map(i => ({ ...i, id: uid() }))]); doSync(); };
-  const delItem = (id) => { setInv(p => p.filter(i => i.id !== id)); doSync(); };
-  const addMsg = (text) => { setMsgs(p => [{ id: uid(), author: "You", role: "Manager", text, time: new Date().toISOString(), replies: [] }, ...p]); };
-  const addReply = (mid, text) => { setMsgs(p => p.map(m => m.id === mid ? { ...m, replies: [...m.replies, { id: uid(), author: "You", text, time: new Date().toISOString() }] } : m)); };
+
+  const bulkDel = async () => {
+    const ids = [...sel];
+    await supabase.from("inventory").delete().in("id", ids);
+    setInv(p => p.filter(i => !sel.has(i.id)));
+    setSel(new Set());
+  };
+
+  const addItem = async (item) => {
+    const { data, error } = await supabase.from("inventory").insert({
+      upc: item.upc, name: item.name, category: item.category,
+      qty: Number(item.qty), price: Number(item.price), expiry: item.expiry || null,
+      added_by: item.addedBy, added_date: item.addedDate, location: item.location
+    }).select();
+    if (data && data[0]) {
+      const i = data[0];
+      setInv(p => [{ id: i.id, upc: i.upc || "", name: i.name, category: i.category || "", qty: i.qty, price: Number(i.price), expiry: i.expiry, addedBy: i.added_by || "", addedDate: i.added_date || "", location: i.location || "" }, ...p]);
+    }
+  };
+
+  const bulkAdd = async (items) => {
+    const rows = items.map(item => ({
+      upc: item.upc, name: item.name, category: item.category,
+      qty: Number(item.qty), price: Number(item.price), expiry: item.expiry || null,
+      added_by: item.addedBy, added_date: item.addedDate, location: item.location
+    }));
+    const { data } = await supabase.from("inventory").insert(rows).select();
+    if (data) {
+      setInv(p => [...data.map(i => ({ id: i.id, upc: i.upc || "", name: i.name, category: i.category || "", qty: i.qty, price: Number(i.price), expiry: i.expiry, addedBy: i.added_by || "", addedDate: i.added_date || "", location: i.location || "" })), ...p]);
+    }
+  };
+
+  const delItem = async (id) => {
+    await supabase.from("inventory").delete().eq("id", id);
+    setInv(p => p.filter(i => i.id !== id));
+  };
+
+  const addMsg = async (text) => {
+    const { data } = await supabase.from("messages").insert({ author: "You", role: "Manager", text }).select();
+    if (data && data[0]) {
+      setMsgs(p => [{ id: data[0].id, author: "You", role: "Manager", text, time: data[0].created_at, replies: [] }, ...p]);
+    }
+  };
+
+  const addReply = async (mid, text) => {
+    const { data } = await supabase.from("replies").insert({ message_id: mid, author: "You", text }).select();
+    if (data && data[0]) {
+      setMsgs(p => p.map(m => m.id === mid ? { ...m, replies: [...m.replies, { id: data[0].id, author: "You", text, time: data[0].created_at }] } : m));
+    }
+  };
 
   const nav = [
     { k: "dashboard", l: "Dashboard", i: <I.Home /> },
@@ -309,7 +399,7 @@ export default function ChurchPantry() {
             {nav.slice(8).map(n => <button key={n.k} className={`ni${pg === n.k ? " ac" : ""}`} onClick={() => { setPg(n.k); setSel(new Set()); }}>{n.i}<span>{n.l}</span></button>)}
           </nav>
           <div className="sb-f">
-            <button className="sy" onClick={doSync}><span className={`sd ${sync}`} /><I.Sync spin={sync === "pg"} />{sync === "ok" ? "Cloud synced" : sync === "pg" ? "Syncing..." : "Offline"}</button>
+            <button className="sy" onClick={doSync}><span className={`sd ${sync}`} /><I.Sync spin={sync === "pg"} />{sync === "ok" ? "Cloud synced" : sync === "pg" ? "Syncing..." : "Connection error"}</button>
           </div>
         </aside>
 
@@ -317,23 +407,25 @@ export default function ChurchPantry() {
           <div className="tb">
             <h2>{pgTitle}</h2>
             <div className="ta">
-              <button className="bt bt-g bt-sm" onClick={doSync} style={{ gap: 5 }}><I.Sync spin={sync === "pg"} />{sync === "ok" ? "Synced" : "Syncing..."}</button>
+              <button className="bt bt-g bt-sm" onClick={doSync} style={{ gap: 5 }}><I.Sync spin={sync === "pg"} />{sync === "ok" ? "Synced" : sync === "pg" ? "Syncing..." : "Retry"}</button>
               {pg === "inventory" && <><button className="bt bt-s bt-sm" onClick={() => setModal("bulkAdd")}>Bulk Add</button><button className="bt bt-p bt-sm" onClick={() => setModal("addItem")}><I.Plus /> Add Item</button></>}
               {pg === "donors" && <button className="bt bt-p bt-sm" onClick={() => setModal("addDonor")}><I.Plus /> Add Donor</button>}
               {pg === "recipients" && <button className="bt bt-p bt-sm" onClick={() => setModal("addRecip")}><I.Plus /> Add Recipient</button>}
             </div>
           </div>
           <div className="ct">
-            {pg === "dashboard" && <Dashboard inv={inv} donors={donors} recip={recip} notifs={notifs} tVal={tVal} tItems={tItems} go={setPg} />}
-            {pg === "inventory" && <Inventory inv={fInv} srch={srch} setSrch={setSrch} sel={sel} selAll={selAll} togSel={togSel} delItem={delItem} setModal={setModal} />}
-            {pg === "scan" && <ScanPage addItem={addItem} />}
-            {pg === "baggo" && <BagGo inv={inv} recip={recip} setInv={setInv} doSync={doSync} />}
-            {pg === "donors" && <Donors donors={donors} />}
-            {pg === "recipients" && <Recipients recip={recip} />}
-            {pg === "discussion" && <Discussion msgs={msgs} addMsg={addMsg} addReply={addReply} />}
-            {pg === "notifications" && <Notifications notifs={notifs} />}
-            {pg === "analytics" && <Analytics inv={inv} donors={donors} recip={recip} />}
-            {pg === "settings" && <Settings eFreq={eFreq} setEFreq={setEFreq} sync={sync} doSync={doSync} />}
+            {loading ? <div className="ld"><I.Sync spin={true} /> Loading data from cloud...</div> : <>
+              {pg === "dashboard" && <Dashboard inv={inv} donors={donors} recip={recip} notifs={notifs} tVal={tVal} tItems={tItems} go={setPg} />}
+              {pg === "inventory" && <Inventory inv={fInv} srch={srch} setSrch={setSrch} sel={sel} selAll={selAll} togSel={togSel} delItem={delItem} setModal={setModal} />}
+              {pg === "scan" && <ScanPage addItem={addItem} />}
+              {pg === "baggo" && <BagGo inv={inv} recip={recip} setInv={setInv} doSync={doSync} />}
+              {pg === "donors" && <Donors donors={donors} />}
+              {pg === "recipients" && <Recipients recip={recip} />}
+              {pg === "discussion" && <Discussion msgs={msgs} addMsg={addMsg} addReply={addReply} />}
+              {pg === "notifications" && <Notifications notifs={notifs} />}
+              {pg === "analytics" && <Analytics inv={inv} donors={donors} recip={recip} />}
+              {pg === "settings" && <Settings eFreq={eFreq} setEFreq={setEFreq} sync={sync} doSync={doSync} />}
+            </>}
           </div>
           {sel.size > 0 && <div className="bb"><span style={{ fontSize: 13, fontWeight: 600 }}>{sel.size} selected</span><button className="bt bt-s bt-sm" onClick={() => setModal("bulkEdit")}><I.Edit /> Bulk Edit</button><button className="bt bt-d bt-sm" onClick={bulkDel}><I.Trash /> Delete</button><div style={{ flex: 1 }} /><button className="bt bt-g bt-sm" style={{ color: "#fff" }} onClick={() => setSel(new Set())}>Cancel</button></div>}
         </main>
@@ -346,8 +438,21 @@ export default function ChurchPantry() {
       {modal === "addItem" && <AddItemModal close={() => setModal(null)} onAdd={addItem} />}
       {modal === "bulkAdd" && <BulkAddModal close={() => setModal(null)} onAdd={bulkAdd} />}
       {modal === "bulkEdit" && <BulkEditModal close={() => setModal(null)} sel={sel} inv={inv} setInv={setInv} setSel={setSel} doSync={doSync} />}
-      {modal === "addDonor" && <AddDonorModal close={() => setModal(null)} onAdd={d => setDonors(p => [...p, { ...d, id: uid() }])} />}
-      {modal === "addRecip" && <AddRecipModal close={() => setModal(null)} onAdd={r => setRecip(p => [...p, { ...r, id: uid() }])} />}
+      {modal === "addDonor" && <AddDonorModal close={() => setModal(null)} onAdd={async (d) => {
+        const { data } = await supabase.from("donors").insert({
+          name: d.name, type: d.type, email: d.email,
+          total_donations: d.totalDonations || 0, total_value: d.totalValue || 0,
+          last_donation: d.lastDonation || null
+        }).select();
+        if (data && data[0]) setDonors(p => [{ id: data[0].id, name: data[0].name, type: data[0].type, totalDonations: data[0].total_donations, lastDonation: data[0].last_donation, totalValue: Number(data[0].total_value), email: data[0].email || "" }, ...p]);
+      }} />}
+      {modal === "addRecip" && <AddRecipModal close={() => setModal(null)} onAdd={async (r) => {
+        const { data } = await supabase.from("recipients").insert({
+          name: r.name, size: Number(r.size), dietary_notes: r.dietaryNotes,
+          visits: r.visits || 0, last_visit: r.lastVisit || null
+        }).select();
+        if (data && data[0]) setRecip(p => [{ id: data[0].id, name: data[0].name, size: data[0].size, dietaryNotes: data[0].dietary_notes || "", visits: data[0].visits, lastVisit: data[0].last_visit }, ...p]);
+      }} />}
     </>
   );
 }
@@ -355,7 +460,7 @@ export default function ChurchPantry() {
 /* ── PAGES ── */
 
 function Dashboard({ inv, donors, recip, notifs, tVal, tItems, go }) {
-  const expS = inv.filter(i => { const d = daysUntil(i.expiry); return d > 0 && d <= 30; }).length;
+  const expS = inv.filter(i => { if (!i.expiry) return false; const d = daysUntil(i.expiry); return d > 0 && d <= 30; }).length;
   const low = inv.filter(i => i.qty <= 5).length;
   return (
     <div className="fu">
@@ -365,6 +470,14 @@ function Dashboard({ inv, donors, recip, notifs, tVal, tItems, go }) {
         <div className={`sc${expS > 0 ? " wr" : ""}`}><div className="lb">Expiring Soon</div><div className="vl">{expS}</div><div className="su">Within 30 days</div></div>
         <div className={`sc${low > 0 ? " al" : ""}`}><div className="lb">Low Stock</div><div className="vl">{low}</div><div className="su">5 or fewer units</div></div>
       </div>
+      {inv.length === 0 && (
+        <div className="cd" style={{ textAlign: "center", padding: 40, marginBottom: 22 }}>
+          <div style={{ fontSize: 36, marginBottom: 10 }}>📦</div>
+          <h3 className="ct2" style={{ marginBottom: 6 }}>Your pantry is empty!</h3>
+          <p style={{ color: "var(--tx3)", fontSize: 13, marginBottom: 16 }}>Get started by adding your first items to the inventory.</p>
+          <button className="bt bt-p" onClick={() => go("scan")}><I.Scan /> Scan & Add Items</button>
+        </div>
+      )}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
         <div className="cd">
           <div className="ch"><h3 className="ct2">Recent Alerts</h3><button className="bt bt-g bt-sm" onClick={() => go("notifications")}>View All</button></div>
@@ -379,10 +492,10 @@ function Dashboard({ inv, donors, recip, notifs, tVal, tItems, go }) {
             <button className="bt bt-s" style={{ width: "100%", justifyContent: "center" }} onClick={() => go("discussion")}><I.Chat /> Discussion Board</button>
             <button className="bt bt-s" style={{ width: "100%", justifyContent: "center" }} onClick={() => go("donors")}><I.Heart /> Manage Donors</button>
           </div>
-          <div style={{ marginTop: 18 }}>
+          {donors.length > 0 && <div style={{ marginTop: 18 }}>
             <h4 className="ct2" style={{ fontSize: 14, marginBottom: 8 }}>Top Donors</h4>
             {donors.slice(0, 3).map(d => <div key={d.id} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid var(--bdr)", fontSize: 13 }}><div><div style={{ fontWeight: 600 }}>{d.name}</div><div style={{ fontSize: 11, color: "var(--tx3)" }}>{d.totalDonations} donations</div></div><div style={{ fontWeight: 700, color: "var(--gn)" }}>{fmtCurrency(d.totalValue)}</div></div>)}
-          </div>
+          </div>}
         </div>
       </div>
     </div>
@@ -403,7 +516,7 @@ function Inventory({ inv, srch, setSrch, sel, selAll, togSel, delItem, setModal 
           <thead><tr><th style={{ width: 38 }}><input type="checkbox" onChange={selAll} checked={sel.size === f.length && f.length > 0} /></th><th>Item</th><th>UPC</th><th>Category</th><th>Qty</th><th>Price</th><th>Expiry</th><th>Location</th><th>Status</th><th style={{ width: 50 }}></th></tr></thead>
           <tbody>
             {f.map((item, idx) => {
-              const d = daysUntil(item.expiry);
+              const d = item.expiry ? daysUntil(item.expiry) : 999;
               const st = d <= 0 ? "ex" : d <= 7 ? "ur" : d <= 30 ? "wn" : "ok";
               const qs = item.qty <= 5 ? "low" : item.qty <= 15 ? "med" : "ok";
               return (
@@ -414,7 +527,7 @@ function Inventory({ inv, srch, setSrch, sel, selAll, togSel, delItem, setModal 
                   <td><span className="tg tg-b">{item.category}</span></td>
                   <td><span className={`tg ${qs === "low" ? "tg-r" : qs === "med" ? "tg-y" : "tg-g"}`}>{item.qty}</span></td>
                   <td>{fmtCurrency(item.price)}</td>
-                  <td style={{ fontSize: 12 }}>{fmt(item.expiry)}</td>
+                  <td style={{ fontSize: 12 }}>{item.expiry ? fmt(item.expiry) : "—"}</td>
                   <td style={{ fontSize: 12, color: "var(--tx3)" }}>{item.location}</td>
                   <td>{st === "ex" ? <span className="tg tg-r">Expired</span> : st === "ur" ? <span className="tg tg-r">{d}d</span> : st === "wn" ? <span className="tg tg-y">{d}d</span> : <span className="tg tg-g">OK</span>}</td>
                   <td><button className="bt bt-g bt-sm" onClick={() => delItem(item.id)} title="Delete"><I.Trash /></button></td>
@@ -423,7 +536,7 @@ function Inventory({ inv, srch, setSrch, sel, selAll, togSel, delItem, setModal 
             })}
           </tbody>
         </table>
-        {f.length === 0 && <p style={{ textAlign: "center", padding: 36, color: "var(--tx3)" }}>No items found.</p>}
+        {f.length === 0 && <p style={{ textAlign: "center", padding: 36, color: "var(--tx3)" }}>No items found. Add your first item!</p>}
       </div>
     </div>
   );
@@ -433,6 +546,7 @@ function ScanPage({ addItem }) {
   const [upc, setUpc] = useState("");
   const [form, setForm] = useState({ name: "", category: "Canned Goods", qty: 1, price: "", expiry: "", location: "" });
   const [scanned, setScanned] = useState(false);
+  const [saving, setSaving] = useState(false);
   const simulateScan = () => {
     setScanned(true);
     const u = "041000" + String(Math.floor(Math.random() * 999999)).padStart(6, "0");
@@ -440,10 +554,12 @@ function ScanPage({ addItem }) {
     const names = ["Corn (canned)", "Black Beans", "Tomato Soup", "Brown Rice", "Spaghetti Noodles"];
     setForm(f => ({ ...f, name: names[Math.floor(Math.random() * names.length)], price: (Math.random() * 5 + 0.99).toFixed(2) }));
   };
-  const submit = () => {
-    if (!form.name) return;
-    addItem({ upc: upc || "000000000000", ...form, qty: Number(form.qty), price: Number(form.price), addedBy: "You", addedDate: new Date().toISOString().slice(0, 10) });
+  const submit = async () => {
+    if (!form.name || saving) return;
+    setSaving(true);
+    await addItem({ upc: upc || "000000000000", ...form, qty: Number(form.qty), price: Number(form.price), addedBy: "You", addedDate: new Date().toISOString().slice(0, 10) });
     setForm({ name: "", category: "Canned Goods", qty: 1, price: "", expiry: "", location: "" }); setUpc(""); setScanned(false);
+    setSaving(false);
   };
   return (
     <div className="fu" style={{ maxWidth: 580 }}>
@@ -470,7 +586,7 @@ function ScanPage({ addItem }) {
           <div className="fg"><label className="fl">Expiry Date</label><input className="fi" type="date" value={form.expiry} onChange={e => setForm(f => ({ ...f, expiry: e.target.value }))} /></div>
         </div>
         <div className="fg"><label className="fl">Location</label><input className="fi" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} placeholder="e.g. Shelf A2" /></div>
-        <button className="bt bt-p" style={{ width: "100%", justifyContent: "center", marginTop: 6 }} onClick={submit}><I.Plus /> Add to Inventory</button>
+        <button className="bt bt-p" style={{ width: "100%", justifyContent: "center", marginTop: 6, opacity: saving ? 0.6 : 1 }} onClick={submit} disabled={saving}><I.Plus /> {saving ? "Saving..." : "Add to Inventory"}</button>
       </div>
     </div>
   );
@@ -486,10 +602,27 @@ function BagGo({ inv, recip, setInv, doSync }) {
   useEffect(() => { if (selR) { const r = recip.find(r => r.id === selR); if (r) { setFSize(r.size); setDiet(r.dietaryNotes); } } }, [selR, recip]);
 
   const gen = () => { setBag(buildBag(inv, fSize, diet)); setPacked(false); };
-  const confirm = () => {
+  const confirm = async () => {
     if (!bag) return;
-    setInv(prev => { const n = [...prev]; bag.bag.forEach(bi => { const idx = n.findIndex(i => i.id === bi.id); if (idx >= 0) n[idx] = { ...n[idx], qty: n[idx].qty - bi.bagQty }; }); return n.filter(i => i.qty > 0); });
-    setPacked(true); doSync();
+    // Update each item's quantity in Supabase
+    for (const bi of bag.bag) {
+      const newQty = Math.max(0, (inv.find(i => i.id === bi.id)?.qty || 0) - bi.bagQty);
+      if (newQty <= 0) {
+        await supabase.from("inventory").delete().eq("id", bi.id);
+      } else {
+        await supabase.from("inventory").update({ qty: newQty }).eq("id", bi.id);
+      }
+    }
+    setInv(prev => {
+      const n = [...prev];
+      bag.bag.forEach(bi => {
+        const idx = n.findIndex(i => i.id === bi.id);
+        if (idx >= 0) n[idx] = { ...n[idx], qty: n[idx].qty - bi.bagQty };
+      });
+      return n.filter(i => i.qty > 0);
+    });
+    setPacked(true);
+    doSync();
   };
 
   const tBI = bag ? bag.bag.reduce((s, i) => s + i.bagQty, 0) : 0;
@@ -519,7 +652,7 @@ function BagGo({ inv, recip, setInv, doSync }) {
           {bag.bag.map((item, i) => (
             <div key={i} className="bi si" style={{ animationDelay: `${i * 40}ms`, ...(packed ? { opacity: .5 } : {}) }}>
               <div className="q">x{item.bagQty}</div>
-              <div className="inf"><div className="nm">{item.name}</div><div className="mt">{item.category} · Exp {fmt(item.expiry)} · {fmtCurrency(item.price)} ea</div></div>
+              <div className="inf"><div className="nm">{item.name}</div><div className="mt">{item.category} · Exp {item.expiry ? fmt(item.expiry) : "N/A"} · {fmtCurrency(item.price)} ea</div></div>
               {item.fifo && <span className="ff">USE FIRST</span>}
               {item.optional && <span className="op">OPTIONAL</span>}
             </div>
@@ -540,9 +673,10 @@ function Donors({ donors }) {
         <div className="sc"><div className="lb">Total Donated</div><div className="vl">{fmtCurrency(donors.reduce((s, d) => s + d.totalValue, 0))}</div></div>
         <div className="sc"><div className="lb">All Donations</div><div className="vl">{donors.reduce((s, d) => s + d.totalDonations, 0)}</div></div>
       </div>
-      <div className="tw"><table><thead><tr><th>Donor</th><th>Type</th><th>Donations</th><th>Last</th><th>Total Value</th><th>Email</th></tr></thead><tbody>
-        {donors.map(d => <tr key={d.id}><td style={{ fontWeight: 600 }}>{d.name}</td><td><span className={`tg ${d.type === "Corporate" ? "tg-b" : d.type === "Organization" ? "tg-g" : "tg-y"}`}>{d.type}</span></td><td>{d.totalDonations}</td><td style={{ fontSize: 12 }}>{fmt(d.lastDonation)}</td><td style={{ fontWeight: 700, color: "var(--gn)" }}>{fmtCurrency(d.totalValue)}</td><td style={{ fontSize: 12, color: "var(--tx3)" }}>{d.email}</td></tr>)}
-      </tbody></table></div>
+      {donors.length === 0 ? <div className="cd" style={{ textAlign: "center", padding: 36, color: "var(--tx3)" }}>No donors yet. Click "Add Donor" to get started!</div>
+      : <div className="tw"><table><thead><tr><th>Donor</th><th>Type</th><th>Donations</th><th>Last</th><th>Total Value</th><th>Email</th></tr></thead><tbody>
+        {donors.map(d => <tr key={d.id}><td style={{ fontWeight: 600 }}>{d.name}</td><td><span className={`tg ${d.type === "Corporate" ? "tg-b" : d.type === "Organization" ? "tg-g" : "tg-y"}`}>{d.type}</span></td><td>{d.totalDonations}</td><td style={{ fontSize: 12 }}>{d.lastDonation ? fmt(d.lastDonation) : "—"}</td><td style={{ fontWeight: 700, color: "var(--gn)" }}>{fmtCurrency(d.totalValue)}</td><td style={{ fontSize: 12, color: "var(--tx3)" }}>{d.email}</td></tr>)}
+      </tbody></table></div>}
     </div>
   );
 }
@@ -555,9 +689,10 @@ function Recipients({ recip }) {
         <div className="sc"><div className="lb">People Served</div><div className="vl">{recip.reduce((s, r) => s + r.size, 0)}</div></div>
         <div className="sc"><div className="lb">Total Visits</div><div className="vl">{recip.reduce((s, r) => s + r.visits, 0)}</div></div>
       </div>
-      <div className="tw"><table><thead><tr><th>Recipient</th><th>Family Size</th><th>Dietary Notes</th><th>Visits</th><th>Last Visit</th></tr></thead><tbody>
-        {recip.map(r => <tr key={r.id}><td style={{ fontWeight: 600 }}>{r.name}</td><td>{r.size}</td><td>{r.dietaryNotes || <span style={{ color: "var(--tx3)" }}>None</span>}</td><td>{r.visits}</td><td style={{ fontSize: 12 }}>{fmt(r.lastVisit)}</td></tr>)}
-      </tbody></table></div>
+      {recip.length === 0 ? <div className="cd" style={{ textAlign: "center", padding: 36, color: "var(--tx3)" }}>No recipients yet. Click "Add Recipient" to get started!</div>
+      : <div className="tw"><table><thead><tr><th>Recipient</th><th>Family Size</th><th>Dietary Notes</th><th>Visits</th><th>Last Visit</th></tr></thead><tbody>
+        {recip.map(r => <tr key={r.id}><td style={{ fontWeight: 600 }}>{r.name}</td><td>{r.size}</td><td>{r.dietaryNotes || <span style={{ color: "var(--tx3)" }}>None</span>}</td><td>{r.visits}</td><td style={{ fontSize: 12 }}>{r.lastVisit ? fmt(r.lastVisit) : "—"}</td></tr>)}
+      </tbody></table></div>}
     </div>
   );
 }
@@ -566,19 +701,21 @@ function Discussion({ msgs, addMsg, addReply }) {
   const [nw, setNw] = useState("");
   const [rTo, setRTo] = useState(null);
   const [rTx, setRTx] = useState("");
+  const [posting, setPosting] = useState(false);
   return (
     <div className="fu" style={{ maxWidth: 680 }}>
       <div className="cd" style={{ marginBottom: 20 }}>
         <textarea className="fi" placeholder="Share an update, need, or note with the team..." value={nw} onChange={e => setNw(e.target.value)} style={{ minHeight: 70, marginBottom: 10 }} />
-        <button className="bt bt-p" onClick={() => { if (nw.trim()) { addMsg(nw.trim()); setNw(""); } }}><I.Chat /> Post</button>
+        <button className="bt bt-p" disabled={posting} onClick={async () => { if (nw.trim()) { setPosting(true); await addMsg(nw.trim()); setNw(""); setPosting(false); } }}><I.Chat /> {posting ? "Posting..." : "Post"}</button>
       </div>
+      {msgs.length === 0 && <div className="cd" style={{ textAlign: "center", padding: 36, color: "var(--tx3)" }}>No discussions yet. Start the conversation!</div>}
       {msgs.map(m => (
         <div key={m.id} className="mc si">
           <div className="mhd"><div className="av">{m.author.split(" ").map(n => n[0]).join("")}</div><div><div style={{ fontWeight: 600, fontSize: 13 }}>{m.author}</div><div style={{ fontSize: 10, color: "var(--tx3)" }}>{m.role}</div></div><div style={{ fontSize: 10, color: "var(--tx3)", marginLeft: "auto" }}>{fmt(m.time)}</div></div>
           <div className="mtx">{m.text}</div>
           {m.replies.length > 0 && <div className="rp">{m.replies.map(r => <div key={r.id} className="ry"><div className="av">{r.author.split(" ").map(n => n[0]).join("")}</div><div style={{ flex: 1 }}><div style={{ fontWeight: 600, fontSize: 11 }}>{r.author}</div><div style={{ fontSize: 12, color: "var(--tx2)", marginTop: 1 }}>{r.text}</div><div style={{ fontSize: 9, color: "var(--tx3)", marginTop: 1 }}>{fmt(r.time)}</div></div></div>)}</div>}
           <div style={{ marginTop: 10 }}>
-            {rTo === m.id ? <div style={{ display: "flex", gap: 7 }}><input className="fi" placeholder="Reply..." value={rTx} onChange={e => setRTx(e.target.value)} style={{ fontSize: 12 }} onKeyDown={e => { if (e.key === "Enter" && rTx.trim()) { addReply(m.id, rTx.trim()); setRTx(""); setRTo(null); } }} /><button className="bt bt-p bt-sm" onClick={() => { if (rTx.trim()) { addReply(m.id, rTx.trim()); setRTx(""); setRTo(null); } }}>Reply</button><button className="bt bt-g bt-sm" onClick={() => { setRTo(null); setRTx(""); }}>Cancel</button></div>
+            {rTo === m.id ? <div style={{ display: "flex", gap: 7 }}><input className="fi" placeholder="Reply..." value={rTx} onChange={e => setRTx(e.target.value)} style={{ fontSize: 12 }} onKeyDown={async e => { if (e.key === "Enter" && rTx.trim()) { await addReply(m.id, rTx.trim()); setRTx(""); setRTo(null); } }} /><button className="bt bt-p bt-sm" onClick={async () => { if (rTx.trim()) { await addReply(m.id, rTx.trim()); setRTx(""); setRTo(null); } }}>Reply</button><button className="bt bt-g bt-sm" onClick={() => { setRTo(null); setRTx(""); }}>Cancel</button></div>
               : <button className="bt bt-g bt-sm" onClick={() => setRTo(m.id)}>Reply</button>}
           </div>
         </div>
@@ -598,7 +735,7 @@ function Notifications({ notifs }) {
 
 function Analytics({ inv, donors, recip }) {
   const byCat = {};
-  inv.forEach(i => { byCat[i.category] = (byCat[i.category] || 0) + i.qty; });
+  inv.forEach(i => { if (i.category) byCat[i.category] = (byCat[i.category] || 0) + i.qty; });
   const ce = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
   const mx = ce[0]?.[1] || 1;
   return (
@@ -612,14 +749,15 @@ function Analytics({ inv, donors, recip }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
         <div className="cd">
           <h3 className="ct2" style={{ marginBottom: 14 }}>Inventory by Category</h3>
+          {ce.length === 0 && <p style={{ color: "var(--tx3)", fontSize: 13, textAlign: "center", padding: 20 }}>Add items to see analytics</p>}
           {ce.map(([cat, qty]) => <div key={cat} style={{ marginBottom: 10 }}><div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 600, marginBottom: 3 }}><span>{cat}</span><span>{qty}</span></div><div style={{ height: 7, background: "var(--bg2)", borderRadius: 4, overflow: "hidden" }}><div style={{ width: `${(qty / mx) * 100}%`, height: "100%", background: "var(--acc)", borderRadius: 4, transition: "width .5s ease" }} /></div></div>)}
         </div>
         <div className="cd">
           <h3 className="ct2" style={{ marginBottom: 14 }}>Expiration Timeline</h3>
-          {[{ l: "Expired", c: inv.filter(i => daysUntil(i.expiry) <= 0).length, cl: "var(--rd)" },
-          { l: "Within 7 Days", c: inv.filter(i => { const d = daysUntil(i.expiry); return d > 0 && d <= 7; }).length, cl: "var(--rd)" },
-          { l: "Within 30 Days", c: inv.filter(i => { const d = daysUntil(i.expiry); return d > 7 && d <= 30; }).length, cl: "var(--yl)" },
-          { l: "30+ Days", c: inv.filter(i => daysUntil(i.expiry) > 30).length, cl: "var(--gn)" }
+          {[{ l: "Expired", c: inv.filter(i => i.expiry && daysUntil(i.expiry) <= 0).length, cl: "var(--rd)" },
+          { l: "Within 7 Days", c: inv.filter(i => { if (!i.expiry) return false; const d = daysUntil(i.expiry); return d > 0 && d <= 7; }).length, cl: "var(--rd)" },
+          { l: "Within 30 Days", c: inv.filter(i => { if (!i.expiry) return false; const d = daysUntil(i.expiry); return d > 7 && d <= 30; }).length, cl: "var(--yl)" },
+          { l: "30+ Days", c: inv.filter(i => !i.expiry || daysUntil(i.expiry) > 30).length, cl: "var(--gn)" }
           ].map(r => <div key={r.l} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: "1px solid var(--bdr)" }}><div style={{ width: 10, height: 10, borderRadius: 3, background: r.cl, flexShrink: 0 }} /><span style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>{r.l}</span><span style={{ fontWeight: 700, fontSize: 15 }}>{r.c}</span></div>)}
           <div style={{ marginTop: 14 }}>
             <h4 style={{ fontSize: 12, fontWeight: 600, color: "var(--tx3)", marginBottom: 6 }}>Donor Types</h4>
@@ -632,13 +770,15 @@ function Analytics({ inv, donors, recip }) {
 }
 
 function Settings({ eFreq, setEFreq, sync, doSync }) {
+  const [testEmail, setTestEmail] = useState("");
+  const [testStatus, setTestStatus] = useState(null);
   return (
     <div className="fu" style={{ maxWidth: 580 }}>
       <div className="cd" style={{ marginBottom: 18 }}>
         <h3 className="ct2" style={{ marginBottom: 3 }}>Cloud Sync</h3>
-        <p style={{ fontSize: 12, color: "var(--tx3)", marginBottom: 14 }}>Data syncs automatically between web and mobile</p>
+        <p style={{ fontSize: 12, color: "var(--tx3)", marginBottom: 14 }}>Data syncs automatically with Supabase cloud database</p>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: "var(--rs)", background: sync === "ok" ? "var(--gn-s)" : "var(--yl-s)", fontSize: 12, fontWeight: 600, color: sync === "ok" ? "var(--gn)" : "var(--yl)" }}><span className={`sd ${sync}`} /><I.Sync spin={sync === "pg"} />{sync === "ok" ? "All synced" : "Syncing..."}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: "var(--rs)", background: sync === "ok" ? "var(--gn-s)" : sync === "off" ? "var(--rd-s)" : "var(--yl-s)", fontSize: 12, fontWeight: 600, color: sync === "ok" ? "var(--gn)" : sync === "off" ? "var(--rd)" : "var(--yl)" }}><span className={`sd ${sync}`} /><I.Sync spin={sync === "pg"} />{sync === "ok" ? "All synced" : sync === "off" ? "Connection error" : "Syncing..."}</div>
           <button className="bt bt-s bt-sm" onClick={doSync}>Force Sync</button>
         </div>
       </div>
@@ -648,8 +788,13 @@ function Settings({ eFreq, setEFreq, sync, doSync }) {
         <div className="ec">
           {[{ k: "biweekly", l: "Bi-Weekly", d: "Every 2 weeks on Monday" }, { k: "monthly", l: "Monthly", d: "1st of each month" }].map(o => <div key={o.k} className={`eo${eFreq === o.k ? " sel" : ""}`} onClick={() => setEFreq(o.k)}><div style={{ fontWeight: 700, fontSize: 13 }}>{o.l}</div><div style={{ fontSize: 10, color: "var(--tx3)", marginTop: 3 }}>{o.d}</div></div>)}
         </div>
-        <div className="fg" style={{ marginTop: 14 }}><label className="fl">Report Recipients</label><input className="fi" placeholder="email1@church.org, email2@church.org" defaultValue="admin@gracechurch.org" /></div>
-        <button className="bt bt-p bt-sm"><I.Mail /> Send Test Report</button>
+        <div className="fg" style={{ marginTop: 14 }}><label className="fl">Report Recipients</label><input className="fi" placeholder="email1@church.org, email2@church.org" value={testEmail} onChange={e => setTestEmail(e.target.value)} /></div>
+        <button className="bt bt-p bt-sm" onClick={() => {
+          if (!testEmail.trim()) { setTestStatus("enter"); return; }
+          setTestStatus("coming");
+        }}><I.Mail /> Send Test Report</button>
+        {testStatus === "enter" && <div style={{ marginTop: 10, padding: 10, background: "var(--yl-s)", borderRadius: 8, fontSize: 12, color: "var(--yl)", fontWeight: 600 }}>Please enter an email address above first.</div>}
+        {testStatus === "coming" && <div style={{ marginTop: 10, padding: 10, background: "var(--bl-s)", borderRadius: 8, fontSize: 12, color: "var(--bl)", fontWeight: 600 }}>Email reports require a Supabase Edge Function + email service (Resend/SendGrid). This will be set up in the next phase!</div>}
       </div>
       <div className="cd" style={{ marginBottom: 18 }}>
         <h3 className="ct2" style={{ marginBottom: 3 }}>Shared Access</h3>
@@ -657,7 +802,7 @@ function Settings({ eFreq, setEFreq, sync, doSync }) {
         <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
           <input className="fi" placeholder="Enter email address" style={{ flex: 1 }} />
           <select className="fi" style={{ width: 130 }}><option>Manager</option><option>Volunteer</option><option>Viewer</option></select>
-          <button className="bt bt-p bt-sm"><I.Share /> Invite</button>
+          <button className="bt bt-p bt-sm" onClick={() => alert("Shared access requires Supabase Auth — coming in the next phase!")}><I.Share /> Invite</button>
         </div>
         <div style={{ fontSize: 11, color: "var(--tx3)" }}><strong>Roles:</strong> Manager (full access) · Volunteer (add/edit, pack bags) · Viewer (read-only)</div>
       </div>
@@ -674,7 +819,14 @@ function Settings({ eFreq, setEFreq, sync, doSync }) {
 
 function AddItemModal({ close, onAdd }) {
   const [f, sF] = useState({ upc: "", name: "", category: "Canned Goods", qty: 1, price: "", expiry: "", location: "" });
-  const sub = () => { if (f.name) { onAdd({ ...f, qty: Number(f.qty), price: Number(f.price), addedBy: "You", addedDate: new Date().toISOString().slice(0, 10) }); close(); } };
+  const [saving, setSaving] = useState(false);
+  const sub = async () => {
+    if (!f.name || saving) return;
+    setSaving(true);
+    await onAdd({ ...f, qty: Number(f.qty), price: Number(f.price), addedBy: "You", addedDate: new Date().toISOString().slice(0, 10) });
+    setSaving(false);
+    close();
+  };
   return (
     <div className="mo" onClick={close}><div className="ml" onClick={e => e.stopPropagation()}>
       <div className="mh"><h3>Add Item</h3><button className="mx" onClick={close}>×</button></div>
@@ -690,7 +842,7 @@ function AddItemModal({ close, onAdd }) {
           <div className="fg"><label className="fl">Expiry Date</label><input className="fi" type="date" value={f.expiry} onChange={e => sF(p => ({ ...p, expiry: e.target.value }))} /></div>
         </div>
         <div className="fg"><label className="fl">Location</label><input className="fi" value={f.location} onChange={e => sF(p => ({ ...p, location: e.target.value }))} /></div>
-        <button className="bt bt-p" style={{ width: "100%", justifyContent: "center" }} onClick={sub}><I.Plus /> Add Item</button>
+        <button className="bt bt-p" style={{ width: "100%", justifyContent: "center", opacity: saving ? 0.6 : 1 }} onClick={sub} disabled={saving}><I.Plus /> {saving ? "Saving..." : "Add Item"}</button>
       </div>
     </div></div>
   );
@@ -699,6 +851,7 @@ function AddItemModal({ close, onAdd }) {
 function BulkAddModal({ close, onAdd }) {
   const [raw, setRaw] = useState("Green Beans, Canned Goods, 24, 1.29, 2026-12-01, Shelf A2\nChicken Soup, Canned Goods, 18, 2.49, 2026-11-15, Shelf A1\nSpaghetti, Grains & Pasta, 30, 1.49, 2027-06-01, Shelf C2");
   const [pv, setPv] = useState([]);
+  const [saving, setSaving] = useState(false);
   const parse = () => {
     const items = raw.trim().split("\n").filter(l => l.trim()).map(line => {
       const p = line.split(",").map(s => s.trim());
@@ -714,7 +867,7 @@ function BulkAddModal({ close, onAdd }) {
         <textarea className="bt2" value={raw} onChange={e => setRaw(e.target.value)} />
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <button className="bt bt-s" onClick={parse}>Preview ({raw.trim().split("\n").filter(l => l.trim()).length} lines)</button>
-          {pv.length > 0 && <button className="bt bt-p" onClick={() => { onAdd(pv); close(); }}><I.Plus /> Add {pv.length} Items</button>}
+          {pv.length > 0 && <button className="bt bt-p" disabled={saving} onClick={async () => { setSaving(true); await onAdd(pv); setSaving(false); close(); }}><I.Plus /> {saving ? "Saving..." : `Add ${pv.length} Items`}</button>}
         </div>
         {pv.length > 0 && <div style={{ marginTop: 14, maxHeight: 180, overflow: "auto" }}><table style={{ fontSize: 11 }}><thead><tr><th>Name</th><th>Category</th><th>Qty</th><th>Price</th><th>Expiry</th></tr></thead><tbody>{pv.map((p, i) => <tr key={i}><td>{p.name}</td><td>{p.category}</td><td>{p.qty}</td><td>{fmtCurrency(p.price)}</td><td>{p.expiry}</td></tr>)}</tbody></table></div>}
       </div>
@@ -725,7 +878,17 @@ function BulkAddModal({ close, onAdd }) {
 function BulkEditModal({ close, sel, inv, setInv, setSel, doSync }) {
   const [fd, setFd] = useState("category");
   const [val, setVal] = useState("");
-  const apply = () => {
+  const [saving, setSaving] = useState(false);
+  const apply = async () => {
+    setSaving(true);
+    const ids = [...sel];
+    const updateField = fd === "category" ? "category" : fd === "location" ? "location" : fd === "qty" ? "qty" : fd === "price" ? "price" : "expiry";
+    const updateVal = fd === "qty" || fd === "price" ? Number(val) : val;
+
+    for (const id of ids) {
+      await supabase.from("inventory").update({ [updateField]: updateVal }).eq("id", id);
+    }
+
     setInv(prev => prev.map(item => {
       if (!sel.has(item.id)) return item;
       if (fd === "category") return { ...item, category: val };
@@ -735,7 +898,10 @@ function BulkEditModal({ close, sel, inv, setInv, setSel, doSync }) {
       if (fd === "expiry") return { ...item, expiry: val };
       return item;
     }));
-    setSel(new Set()); doSync(); close();
+    setSel(new Set());
+    setSaving(false);
+    doSync();
+    close();
   };
   return (
     <div className="mo" onClick={close}><div className="ml" onClick={e => e.stopPropagation()}>
@@ -749,7 +915,7 @@ function BulkEditModal({ close, sel, inv, setInv, setSel, doSync }) {
                 : <input className="fi" value={val} onChange={e => setVal(e.target.value)} />}
         </div>
         <p style={{ fontSize: 11, color: "var(--tx3)", marginBottom: 14 }}>Updates <strong>{sel.size} items</strong> at once.</p>
-        <div style={{ display: "flex", gap: 8 }}><button className="bt bt-p" onClick={apply} disabled={!val}><I.Edit /> Apply</button><button className="bt bt-s" onClick={close}>Cancel</button></div>
+        <div style={{ display: "flex", gap: 8 }}><button className="bt bt-p" onClick={apply} disabled={!val || saving}><I.Edit /> {saving ? "Applying..." : "Apply"}</button><button className="bt bt-s" onClick={close}>Cancel</button></div>
       </div>
     </div></div>
   );
@@ -757,6 +923,7 @@ function BulkEditModal({ close, sel, inv, setInv, setSel, doSync }) {
 
 function AddDonorModal({ close, onAdd }) {
   const [f, sF] = useState({ name: "", type: "Individual", email: "", totalDonations: 0, totalValue: 0, lastDonation: new Date().toISOString().slice(0, 10) });
+  const [saving, setSaving] = useState(false);
   return (
     <div className="mo" onClick={close}><div className="ml" onClick={e => e.stopPropagation()}>
       <div className="mh"><h3>Add Donor</h3><button className="mx" onClick={close}>×</button></div>
@@ -764,7 +931,7 @@ function AddDonorModal({ close, onAdd }) {
         <div className="fg"><label className="fl">Name *</label><input className="fi" value={f.name} onChange={e => sF(p => ({ ...p, name: e.target.value }))} /></div>
         <div className="fg"><label className="fl">Type</label><select className="fi" value={f.type} onChange={e => sF(p => ({ ...p, type: e.target.value }))}><option>Individual</option><option>Family</option><option>Organization</option><option>Corporate</option></select></div>
         <div className="fg"><label className="fl">Email</label><input className="fi" value={f.email} onChange={e => sF(p => ({ ...p, email: e.target.value }))} /></div>
-        <button className="bt bt-p" style={{ width: "100%", justifyContent: "center" }} onClick={() => { if (f.name) { onAdd(f); close(); } }}><I.Plus /> Add Donor</button>
+        <button className="bt bt-p" style={{ width: "100%", justifyContent: "center", opacity: saving ? 0.6 : 1 }} disabled={saving} onClick={async () => { if (f.name) { setSaving(true); await onAdd(f); setSaving(false); close(); } }}><I.Plus /> {saving ? "Saving..." : "Add Donor"}</button>
       </div>
     </div></div>
   );
@@ -772,6 +939,7 @@ function AddDonorModal({ close, onAdd }) {
 
 function AddRecipModal({ close, onAdd }) {
   const [f, sF] = useState({ name: "", size: 1, dietaryNotes: "", visits: 0, lastVisit: new Date().toISOString().slice(0, 10) });
+  const [saving, setSaving] = useState(false);
   return (
     <div className="mo" onClick={close}><div className="ml" onClick={e => e.stopPropagation()}>
       <div className="mh"><h3>Add Recipient</h3><button className="mx" onClick={close}>×</button></div>
@@ -779,7 +947,7 @@ function AddRecipModal({ close, onAdd }) {
         <div className="fg"><label className="fl">Name *</label><input className="fi" value={f.name} onChange={e => sF(p => ({ ...p, name: e.target.value }))} /></div>
         <div className="fg"><label className="fl">Family Size</label><input className="fi" type="number" min="1" value={f.size} onChange={e => sF(p => ({ ...p, size: e.target.value }))} /></div>
         <div className="fg"><label className="fl">Dietary Notes</label><input className="fi" value={f.dietaryNotes} onChange={e => sF(p => ({ ...p, dietaryNotes: e.target.value }))} placeholder="Nut allergy, Vegetarian, Diabetic..." /></div>
-        <button className="bt bt-p" style={{ width: "100%", justifyContent: "center" }} onClick={() => { if (f.name) { onAdd({ ...f, size: Number(f.size) }); close(); } }}><I.Plus /> Add Recipient</button>
+        <button className="bt bt-p" style={{ width: "100%", justifyContent: "center", opacity: saving ? 0.6 : 1 }} disabled={saving} onClick={async () => { if (f.name) { setSaving(true); await onAdd({ ...f, size: Number(f.size) }); setSaving(false); close(); } }}><I.Plus /> {saving ? "Saving..." : "Add Recipient"}</button>
       </div>
     </div></div>
   );
