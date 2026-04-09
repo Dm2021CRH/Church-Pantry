@@ -17,7 +17,7 @@ const BAG_RULES = {
   6:{canned:14,grains:7,protein:6,dairy:4,beverage:4,snack:4,hygiene:3},
   7:{canned:16,grains:8,protein:7,dairy:4,beverage:4,snack:5,hygiene:3},
 };
-const catToRule = {"Canned Goods":"canned","Grains & Pasta":"grains","Meat & Protein":"protein","Dairy":"dairy","Beverages":"beverage","Snacks":"snack","Hygiene":"hygiene","Baby & Infant":"baby","Condiments":"canned","Baking":"grains","Frozen":"protein","Produce":"produce"};
+const catToRule = {"Canned Goods":"canned","Grains & Pasta":"grains","Meat & Protein":"protein","Dairy":"dairy","Beverages":"beverage","Snacks":"snack","Hygiene":"hygiene","Baby & Infant":"baby","Condiments":"canned","Baking":"grains","Frozen":"protein","Produce":"produce","Sauce":"canned","Breakfast items":"grains","Condiment":"canned","Salad toppings":"canned","Meal in Can":"protein","Pasta":"grains","Seafood":"protein","Meat":"protein","Side dish":"canned","Pasta Dish":"grains","Baking goods":"grains","Cookies-sweets":"snack","Cooking oils":"canned","Other":"canned","Baking mix":"grains","Soup":"canned"};
 
 function buildBag(inventory, familySize, dietaryNotes = "") {
   const rules = BAG_RULES[Math.min(familySize, 7)] || BAG_RULES[7];
