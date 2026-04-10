@@ -1,69 +1,34 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-
+import { supabase } from "../lib/supabase";
 /* ═══════════════════════════════════════════
-   CHURCH PANTRY — Full App (with Export)
+   CHURCH PANTRY — Supabase Connected + Editable Categories + Export
    ═══════════════════════════════════════════ */
 
-// ── Seed Data ──
-const CATEGORIES = ["Canned Goods","Grains & Pasta","Dairy","Produce","Meat & Protein","Snacks","Beverages","Baby & Infant","Hygiene","Condiments","Baking","Frozen"];
-const SAMPLE_INVENTORY = [
-  {id:"i1",upc:"041000000001",name:"Green Beans (canned)",category:"Canned Goods",qty:48,price:1.29,expiry:"2026-06-15",addedBy:"Sarah M.",addedDate:"2026-03-20",location:"Shelf A2"},
-  {id:"i2",upc:"041000000002",name:"Peanut Butter 16oz",category:"Snacks",qty:24,price:3.49,expiry:"2027-01-10",addedBy:"James R.",addedDate:"2026-03-18",location:"Shelf B1"},
-  {id:"i3",upc:"041000000003",name:"White Rice 2lb",category:"Grains & Pasta",qty:36,price:2.99,expiry:"2027-08-01",addedBy:"Sarah M.",addedDate:"2026-03-15",location:"Shelf C3"},
-  {id:"i4",upc:"041000000004",name:"Chicken Broth 32oz",category:"Canned Goods",qty:18,price:2.49,expiry:"2026-04-20",addedBy:"Tom K.",addedDate:"2026-02-10",location:"Shelf A1"},
-  {id:"i5",upc:"041000000005",name:"Whole Wheat Pasta",category:"Grains & Pasta",qty:30,price:1.79,expiry:"2027-03-15",addedBy:"Maria L.",addedDate:"2026-03-22",location:"Shelf C2"},
-  {id:"i6",upc:"041000000006",name:"Baby Formula 12oz",category:"Baby & Infant",qty:8,price:18.99,expiry:"2026-05-30",addedBy:"Sarah M.",addedDate:"2026-03-25",location:"Shelf D1"},
-  {id:"i7",upc:"041000000007",name:"Canned Tuna",category:"Meat & Protein",qty:42,price:1.59,expiry:"2028-01-01",addedBy:"James R.",addedDate:"2026-03-10",location:"Shelf A3"},
-  {id:"i8",upc:"041000000008",name:"Instant Oatmeal Box",category:"Grains & Pasta",qty:15,price:3.99,expiry:"2026-09-15",addedBy:"Tom K.",addedDate:"2026-03-28",location:"Shelf C1"},
-  {id:"i9",upc:"041000000009",name:"Toothpaste",category:"Hygiene",qty:20,price:2.49,expiry:"2027-12-01",addedBy:"Maria L.",addedDate:"2026-03-30",location:"Shelf E1"},
-  {id:"i10",upc:"041000000010",name:"Apple Juice 64oz",category:"Beverages",qty:12,price:3.29,expiry:"2026-07-20",addedBy:"Sarah M.",addedDate:"2026-04-01",location:"Shelf B3"},
-  {id:"i11",upc:"041000000011",name:"Mac & Cheese Box",category:"Grains & Pasta",qty:55,price:1.09,expiry:"2027-04-10",addedBy:"James R.",addedDate:"2026-04-02",location:"Shelf C4"},
-  {id:"i12",upc:"041000000012",name:"Evaporated Milk",category:"Dairy",qty:22,price:1.89,expiry:"2026-08-18",addedBy:"Tom K.",addedDate:"2026-04-03",location:"Shelf A4"},
-];
-const SAMPLE_DONORS = [
-  {id:"d1",name:"Grace Baptist Women's Group",type:"Organization",totalDonations:12,lastDonation:"2026-03-28",totalValue:847.50,email:"grace.womens@email.com"},
-  {id:"d2",name:"Johnson Family",type:"Family",totalDonations:6,lastDonation:"2026-04-01",totalValue:324.00,email:"johnson.fam@email.com"},
-  {id:"d3",name:"Walmart Community Grant",type:"Corporate",totalDonations:3,lastDonation:"2026-03-15",totalValue:2500.00,email:"community@walmart.com"},
-  {id:"d4",name:"Mike Torres",type:"Individual",totalDonations:18,lastDonation:"2026-04-05",totalValue:1120.00,email:"mike.t@email.com"},
-];
-const SAMPLE_RECIPIENTS = [
-  {id:"r1",name:"Williams Family",size:5,dietaryNotes:"Nut allergy (child)",visits:8,lastVisit:"2026-04-03"},
-  {id:"r2",name:"Maria Gonzalez",size:2,dietaryNotes:"Diabetic",visits:12,lastVisit:"2026-04-06"},
-  {id:"r3",name:"Anderson Household",size:7,dietaryNotes:"",visits:4,lastVisit:"2026-03-28"},
-  {id:"r4",name:"James Cooper",size:1,dietaryNotes:"Vegetarian",visits:15,lastVisit:"2026-04-05"},
-];
-const SAMPLE_MESSAGES = [
-  {id:"m1",author:"Sarah M.",role:"Manager",text:"We're running very low on baby formula. If anyone has connections to suppliers, please reach out!",time:"2026-04-06T14:30:00",replies:[{id:"m1r1",author:"Tom K.",text:"I'll check with the Walmart grant contact — they've donated formula before.",time:"2026-04-06T15:10:00"}]},
-  {id:"m2",author:"James R.",role:"Volunteer",text:"Huge shoutout to the Johnson family for their donation this week! 6 bags of rice and canned goods.",time:"2026-04-05T09:00:00",replies:[]},
-  {id:"m3",author:"Maria L.",role:"Manager",text:"Easter food drive is April 12th. We need volunteers for sorting from 8am-12pm. Who's in?",time:"2026-04-04T11:20:00",replies:[{id:"m3r1",author:"James R.",text:"Count me in!",time:"2026-04-04T12:00:00"},{id:"m3r2",author:"Tom K.",text:"I can do 8-10am",time:"2026-04-04T13:45:00"}]},
-];
+const DEFAULT_CATEGORIES = ["Canned Goods","Grains & Pasta","Dairy","Produce","Meat & Protein","Snacks","Beverages","Baby & Infant","Hygiene","Condiments","Baking","Frozen"];
 
-// ── Helpers ──
-const today = new Date("2026-04-07");
+const today = new Date();
 const daysUntil = (d) => Math.ceil((new Date(d) - today) / 86400000);
-const fmt = (d) => new Date(d).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+const fmt = (d) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 const fmtCurrency = (v) => "$" + Number(v).toFixed(2);
-const uid = () => Math.random().toString(36).slice(2,9);
 
-// ── BAG & GO logic ──
 const BAG_RULES = {
-  1: {canned:4,grains:2,protein:2,dairy:1,beverage:1,snack:1,hygiene:1},
-  2: {canned:6,grains:3,protein:3,dairy:2,beverage:2,snack:2,hygiene:1},
-  3: {canned:8,grains:4,protein:4,dairy:2,beverage:2,snack:3,hygiene:2},
-  4: {canned:10,grains:5,protein:4,dairy:3,beverage:3,snack:3,hygiene:2},
-  5: {canned:12,grains:6,protein:5,dairy:3,beverage:3,snack:4,hygiene:2},
-  6: {canned:14,grains:7,protein:6,dairy:4,beverage:4,snack:4,hygiene:3},
-  7: {canned:16,grains:8,protein:7,dairy:4,beverage:4,snack:5,hygiene:3},
+  1:{canned:4,grains:2,protein:2,dairy:1,beverage:1,snack:1,hygiene:1},
+  2:{canned:6,grains:3,protein:3,dairy:2,beverage:2,snack:2,hygiene:1},
+  3:{canned:8,grains:4,protein:4,dairy:2,beverage:2,snack:3,hygiene:2},
+  4:{canned:10,grains:5,protein:4,dairy:3,beverage:3,snack:3,hygiene:2},
+  5:{canned:12,grains:6,protein:5,dairy:3,beverage:3,snack:4,hygiene:2},
+  6:{canned:14,grains:7,protein:6,dairy:4,beverage:4,snack:4,hygiene:3},
+  7:{canned:16,grains:8,protein:7,dairy:4,beverage:4,snack:5,hygiene:3},
 };
-const catToRule = {"Canned Goods":"canned","Grains & Pasta":"grains","Meat & Protein":"protein","Dairy":"dairy","Beverages":"beverage","Snacks":"snack","Hygiene":"hygiene","Baby & Infant":"baby","Produce":"produce","Condiments":"canned","Baking":"grains","Frozen":"protein"};
+const catToRule = {"Canned Goods":"canned","Grains & Pasta":"grains","Meat & Protein":"protein","Dairy":"dairy","Beverages":"beverage","Snacks":"snack","Hygiene":"hygiene","Baby & Infant":"baby","Condiments":"canned","Baking":"grains","Frozen":"protein","Produce":"produce","Sauce":"canned","Breakfast items":"grains","Condiment":"canned","Salad toppings":"canned","Meal in Can":"protein","Pasta":"grains","Seafood":"protein","Meat":"protein","Side dish":"canned","Pasta Dish":"grains","Baking goods":"grains","Cookies-sweets":"snack","Cooking oils":"canned","Other":"canned","Baking mix":"grains","Soup":"canned"};
 
 function buildBag(inventory, familySize, dietaryNotes = "") {
   const rules = BAG_RULES[Math.min(familySize, 7)] || BAG_RULES[7];
   const scaled = {};
   Object.keys(rules).forEach(k => { scaled[k] = Math.ceil(rules[k] * (familySize > 7 ? familySize / 7 : 1)); });
-  const sorted = [...inventory].filter(i => i.qty > 0 && daysUntil(i.expiry) > 0).sort((a,b) => new Date(a.expiry) - new Date(b.expiry));
+  const sorted = [...inventory].filter(i => i.qty > 0 && daysUntil(i.expiry) > 0).sort((a, b) => new Date(a.expiry) - new Date(b.expiry));
   const bag = [];
-  const needs = {...scaled};
+  const needs = { ...scaled };
   const isVeg = dietaryNotes.toLowerCase().includes("vegetarian");
   const nutAllergy = dietaryNotes.toLowerCase().includes("nut");
   sorted.forEach(item => {
@@ -72,953 +37,757 @@ function buildBag(inventory, familySize, dietaryNotes = "") {
     if (isVeg && item.category === "Meat & Protein") return;
     if (nutAllergy && item.name.toLowerCase().includes("peanut")) return;
     const take = Math.min(needs[rule], item.qty);
-    bag.push({...item, bagQty: take, fifo: daysUntil(item.expiry) <= 30});
+    bag.push({ ...item, bagQty: take, fifo: daysUntil(item.expiry) <= 30 });
     needs[rule] -= take;
   });
   if (familySize >= 3) {
     const formula = sorted.find(i => i.category === "Baby & Infant" && i.qty > 0);
-    if (formula) bag.push({...formula, bagQty: 1, fifo: false, optional: true});
+    if (formula && !bag.find(b => b.id === formula.id)) bag.push({ ...formula, bagQty: 1, fifo: false, optional: true });
   }
-  return { bag, unmet: Object.entries(needs).filter(([,v]) => v > 0).map(([k,v]) => ({category:k,needed:v})) };
+  return { bag, unmet: Object.entries(needs).filter(([, v]) => v > 0).map(([k, v]) => ({ category: k, needed: v })) };
 }
 
-// ══════════════════════════════════════
-//  EXPORT HELPERS (NEW)
-// ══════════════════════════════════════
-
-function exportCSV(items, filename = "church-pantry-inventory") {
-  const headers = ["Item Name","UPC","Category","Quantity","Unit Price","Total Value","Expiry Date","Days Until Expiry","Location","Added By","Date Added","Status"];
-  const rows = items.map(item => {
-    const d = daysUntil(item.expiry);
-    const status = d <= 0 ? "Expired" : d <= 7 ? "Expiring (Critical)" : d <= 30 ? "Expiring Soon" : "Good";
-    return [
-      `"${item.name}"`,item.upc,`"${item.category}"`,item.qty,item.price.toFixed(2),
-      (item.qty * item.price).toFixed(2),item.expiry,d,`"${item.location || ""}"`,
-      `"${item.addedBy || ""}"`,item.addedDate || "",status
-    ].join(",");
-  });
-  const totalQty = items.reduce((s, i) => s + i.qty, 0);
-  const totalVal = items.reduce((s, i) => s + i.qty * i.price, 0);
-  rows.push("");
-  rows.push(`"TOTAL","","",${totalQty},"",${totalVal.toFixed(2)},"","","","","",""`);
-  rows.push(`"Export Date","${new Date().toLocaleDateString()}","","","","","","","","","",""`);
-  rows.push(`"Items Exported","${items.length}","","","","","","","","","",""`);
-  const csv = [headers.join(","), ...rows].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${filename}-${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+// ── Export Helpers ──
+function exportCSV(inv) {
+  const hdr = "UPC,Name,Category,Qty,Price,Expiry,Location,Added By,Added Date";
+  const rows = inv.map(i => [i.upc,`"${(i.name||"").replace(/"/g,'""')}"`,`"${i.category}"`,i.qty,i.price,i.expiry,`"${i.location||""}"`,`"${i.added_by||""}"`,i.added_date].join(","));
+  const blob = new Blob([hdr + "\n" + rows.join("\n")], { type: "text/csv" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `inventory_${new Date().toISOString().slice(0,10)}.csv`; a.click();
 }
-
-function exportPDF(items, filterLabel = "All Categories") {
-  const totalQty = items.reduce((s, i) => s + i.qty, 0);
-  const totalVal = items.reduce((s, i) => s + i.qty * i.price, 0);
-  const expiringSoon = items.filter(i => { const d = daysUntil(i.expiry); return d > 0 && d <= 30; }).length;
-  const expired = items.filter(i => daysUntil(i.expiry) <= 0).length;
-  const byCategory = {};
-  items.forEach(i => { if (!byCategory[i.category]) byCategory[i.category] = []; byCategory[i.category].push(i); });
-  const catSections = Object.entries(byCategory).sort((a,b) => a[0].localeCompare(b[0])).map(([cat, catItems]) => {
-    const catQty = catItems.reduce((s, i) => s + i.qty, 0);
-    const catVal = catItems.reduce((s, i) => s + i.qty * i.price, 0);
-    const rows = catItems.sort((a,b) => new Date(a.expiry) - new Date(b.expiry)).map(item => {
-      const d = daysUntil(item.expiry);
-      const sc = d <= 0 ? "expired" : d <= 7 ? "critical" : d <= 30 ? "warning" : "";
-      const st = d <= 0 ? "EXPIRED" : d <= 7 ? `${d}d left` : d <= 30 ? `${d}d left` : `${d}d`;
-      return `<tr class="${sc}"><td>${item.name}</td><td class="mono">${item.upc}</td><td class="num">${item.qty}</td><td class="num">$${item.price.toFixed(2)}</td><td class="num">$${(item.qty*item.price).toFixed(2)}</td><td>${item.expiry}</td><td class="status">${st}</td><td>${item.location||"—"}</td></tr>`;
-    }).join("");
-    return `<div class="cat-section"><div class="cat-header"><h3>${cat}</h3><span class="cat-summary">${catItems.length} items · ${catQty} units · $${catVal.toFixed(2)}</span></div><table><thead><tr><th>Item</th><th>UPC</th><th>Qty</th><th>Price</th><th>Value</th><th>Expires</th><th>Status</th><th>Location</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-  }).join("");
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Church Pantry — Inventory Report</title><style>
-@media print{body{margin:0}.no-print{display:none!important}.cat-section{break-inside:avoid}}
-*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#2C1810;background:#fff;padding:32px;font-size:12px}
-.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid #C4582A}
-.header h1{font-size:22px;color:#C4582A}.header h2{font-size:14px;color:#6B5344;font-weight:400;margin-top:4px}
-.meta{text-align:right;font-size:11px;color:#6B5344}.meta strong{color:#2C1810}
-.summary-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:24px}
-.summary-card{background:#FAF6F1;border:1px solid #E4D9CF;border-radius:8px;padding:12px;text-align:center}
-.summary-card .label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#9C8578;margin-bottom:4px}
-.summary-card .value{font-size:20px;font-weight:700;color:#2C1810}
-.summary-card.alert .value{color:#C42A2A}.summary-card.warn .value{color:#C49B2A}
-.cat-section{margin-bottom:20px}.cat-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;padding:6px 0;border-bottom:1px solid #E4D9CF}
-.cat-header h3{font-size:14px;color:#C4582A}.cat-summary{font-size:11px;color:#9C8578}
-table{width:100%;border-collapse:collapse;font-size:11px}
-th{background:#FAF6F1;padding:6px 8px;text-align:left;font-weight:600;border-bottom:1px solid #E4D9CF;font-size:10px;text-transform:uppercase;letter-spacing:.3px;color:#6B5344}
-td{padding:5px 8px;border-bottom:1px solid #f0ebe5}
-tr.expired{background:#FFEBEE}tr.expired td{color:#C42A2A}tr.critical{background:#FFF3E0}tr.warning{background:#FFFDE7}
-.mono{font-family:monospace;font-size:10px;color:#9C8578}.num{text-align:right}
-.status{font-weight:600;font-size:10px}tr.expired .status{color:#C42A2A}tr.critical .status{color:#E65100}tr.warning .status{color:#C49B2A}
-.footer{margin-top:24px;padding-top:12px;border-top:1px solid #E4D9CF;font-size:10px;color:#9C8578;display:flex;justify-content:space-between}
-.print-btn{position:fixed;bottom:24px;right:24px;padding:12px 24px;background:#C4582A;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2)}
-.print-btn:hover{background:#A3451F}</style></head><body>
-<div class="header"><div><h1>Church Pantry</h1><h2>Inventory Report — ${filterLabel}</h2></div>
-<div class="meta"><div><strong>Generated:</strong> ${new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</div>
-<div><strong>Time:</strong> ${new Date().toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"})}</div>
-<div><strong>Items:</strong> ${items.length} unique · ${totalQty} total units</div></div></div>
-<div class="summary-grid">
-<div class="summary-card"><div class="label">Unique Items</div><div class="value">${items.length}</div></div>
-<div class="summary-card"><div class="label">Total Units</div><div class="value">${totalQty.toLocaleString()}</div></div>
-<div class="summary-card"><div class="label">Total Value</div><div class="value">$${totalVal.toFixed(2)}</div></div>
-<div class="summary-card ${expired>0?'alert':''}"><div class="label">Expired</div><div class="value">${expired}</div></div>
-<div class="summary-card ${expiringSoon>0?'warn':''}"><div class="label">Expiring ≤30d</div><div class="value">${expiringSoon}</div></div>
-</div>${catSections}
-<div class="footer"><span>Church Pantry Inventory Management System</span><span>Confidential — For internal use only</span></div>
-<button class="print-btn no-print" onclick="window.print()">Print / Save as PDF</button>
-</body></html>`;
-  const w = window.open("", "_blank");
-  w.document.write(html);
-  w.document.close();
+function exportPDF(inv) {
+  const totalQty = inv.reduce((s,i) => s + i.qty, 0);
+  const totalVal = inv.reduce((s,i) => s + i.qty * i.price, 0);
+  const cats = [...new Set(inv.map(i => i.category))].sort();
+  const html = `<html><head><title>Inventory Report</title><style>
+    body{font-family:system-ui;padding:40px;color:#1a1a1a}
+    h1{font-size:22px;margin-bottom:4px} .sub{color:#666;font-size:13px;margin-bottom:24px}
+    .stats{display:flex;gap:20px;margin-bottom:24px} .stat{background:#f5f5f5;padding:14px 20px;border-radius:8px;min-width:120px}
+    .stat .n{font-size:22px;font-weight:700} .stat .l{font-size:11px;color:#888;text-transform:uppercase}
+    table{width:100%;border-collapse:collapse;font-size:12px;margin-top:12px}
+    th{background:#f0f0f0;text-align:left;padding:8px 10px;font-weight:600;border-bottom:2px solid #ddd}
+    td{padding:7px 10px;border-bottom:1px solid #eee} tr:nth-child(even){background:#fafafa}
+    .cat{margin-top:24px;font-size:15px;font-weight:700;border-bottom:2px solid #333;padding-bottom:4px}
+    .pbtn{position:fixed;top:20px;right:20px;padding:10px 20px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600}
+    @media print{.pbtn{display:none} body{padding:20px}}
+  </style></head><body>
+  <h1>Church Pantry — Inventory Report</h1>
+  <div class="sub">Generated ${new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})} · <span style="color:#999">Confidential — For internal use only</span></div>
+  <div class="stats"><div class="stat"><div class="n">${inv.length}</div><div class="l">Unique Items</div></div><div class="stat"><div class="n">${totalQty}</div><div class="l">Total Units</div></div><div class="stat"><div class="n">$${totalVal.toFixed(2)}</div><div class="l">Total Value</div></div></div>
+  ${cats.map(c => { const items = inv.filter(i => i.category === c); return `<div class="cat">${c} (${items.length})</div><table><tr><th>Item</th><th>UPC</th><th>Qty</th><th>Price</th><th>Expiry</th><th>Location</th></tr>${items.map(i => `<tr><td>${i.name}</td><td>${i.upc||""}</td><td>${i.qty}</td><td>$${Number(i.price).toFixed(2)}</td><td>${i.expiry||""}</td><td>${i.location||""}</td></tr>`).join("")}</table>`; }).join("")}
+  <button class="pbtn no-print" onclick="window.print()">Print / Save as PDF</button></body></html>`;
+  const w = window.open("","_blank"); w.document.write(html); w.document.close();
 }
 
 // ── Icons ──
-const Icons = {
+const I = {
   Home: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
-  Package: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
-  Scan: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>,
-  Heart: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>,
+  Pkg: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
+  Scan: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>,
+  Bag: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>,
+  Heart: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg>,
   Users: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
   Chat: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
-  Bell: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
-  Chart: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
-  Plus: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
-  Search: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
-  AlertTriangle: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
-  Trash: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
-  Edit: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
-  Share: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>,
-  Mail: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
-  Download: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+  Bell: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
+  Chart: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+  Gear: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+  Cloud: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>,
+  Plus: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  Trash: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+  Edit: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  Check: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+  X: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  Down: () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>,
+  Search: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+  Menu: () => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
 };
 
-const SyncIcon = ({spinning}) => (
-  <svg className={spinning?"spinning":""} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <path d="M21.5 2v6h-6"/><path d="M2.5 22v-6h6"/><path d="M2.5 11.5a10 10 0 0 1 16.5-5.7L21.5 8"/><path d="M21.5 12.5a10 10 0 0 1-16.5 5.7L2.5 16"/>
-  </svg>
-);
-const BagIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/>
-  </svg>
-);
-const SettingsIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-  </svg>
-);
-
-// ── Styles ──
+// ── CSS ──
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
-:root {
-  --bg: #FAF6F1; --bg2: #F2EBE3; --bg3: #FFFFFF;
-  --text: #2C1810; --text2: #6B5344; --text3: #9C8578;
-  --accent: #C4582A; --accent2: #D4763E; --accent-soft: #FFF0E8;
-  --green: #3D7A4A; --green-soft: #E8F5E9;
-  --yellow: #C49B2A; --yellow-soft: #FFF8E1;
-  --red: #C42A2A; --red-soft: #FFEBEE;
-  --blue: #2A6BC4; --blue-soft: #E3F2FD;
-  --border: #E4D9CF;
-  --shadow: 0 2px 12px rgba(44,24,16,0.06);
-  --shadow-lg: 0 8px 32px rgba(44,24,16,0.1);
-  --radius: 12px; --radius-sm: 8px;
-  --font-display: 'DM Serif Display', serif;
-  --font-body: 'IBM Plex Sans', sans-serif;
-  --sync-color: #3D7A4A;
+:root{--bg:#F8F7F4;--sf:#FFFFFF;--tx:#1A1A1A;--tx2:#6B7280;--tx3:#9CA3AF;--acc:#2563EB;--acc-h:#1D4ED8;--acc-s:#EFF6FF;--gn:#16A34A;--gn-s:#F0FDF4;--rd:#DC2626;--rd-s:#FEF2F2;--yl:#CA8A04;--yl-s:#FEFCE8;--bd:#E5E7EB;--hd:"Inter",system-ui,sans-serif;--bd-r:10px}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body,#root{height:100%;font-family:var(--hd);background:var(--bg);color:var(--tx);font-size:14px;-webkit-font-smoothing:antialiased}
+.app{display:flex;height:100vh;overflow:hidden}
+.sb{width:240px;background:var(--sf);border-right:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0;transition:transform .2s}
+.sb-hd{padding:20px;border-bottom:1px solid var(--bd)}
+.sb-hd h1{font-size:18px;font-weight:800;color:var(--acc);letter-spacing:-.3px}
+.sb-hd p{font-size:11px;color:var(--tx3);margin-top:2px}
+.sb-nav{flex:1;overflow-y:auto;padding:12px}
+.sb-sec{font-size:10px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px;padding:12px 10px 6px}
+.sb-it{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;color:var(--tx2);transition:all .15s}
+.sb-it:hover{background:var(--acc-s);color:var(--acc)}
+.sb-it.ac{background:var(--acc-s);color:var(--acc);font-weight:600}
+.sb-ft{padding:14px 20px;border-top:1px solid var(--bd);font-size:11px;color:var(--tx3);display:flex;align-items:center;gap:6px}
+.mn{flex:1;overflow-y:auto;padding:24px;max-width:1100px;margin:0 auto}
+.tp{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.tp h2{font-size:22px;font-weight:800;letter-spacing:-.3px}
+.tp .sync{font-size:11px;color:var(--gn);display:flex;align-items:center;gap:4px;background:var(--gn-s);padding:4px 10px;border-radius:20px;font-weight:600}
+.sg{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:28px}
+.cd{background:var(--sf);border-radius:var(--bd-r);padding:18px;border:1px solid var(--bd)}
+.cd .lb{font-size:11px;color:var(--tx3);font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.cd .vl{font-size:28px;font-weight:800;margin-top:4px;letter-spacing:-.5px}
+.cd .sm{font-size:11px;color:var(--tx2);margin-top:2px}
+.al-it{display:flex;align-items:start;gap:10px;padding:12px;border-radius:8px;background:var(--yl-s);margin-bottom:8px}
+.al-it .al-dot{width:8px;height:8px;border-radius:50%;background:var(--yl);margin-top:4px;flex-shrink:0}
+.al-it .al-tx{font-size:13px;font-weight:500}
+.al-it .al-sm{font-size:11px;color:var(--tx3);margin-top:2px}
+.tb{width:100%;border-collapse:collapse}
+.tb th{text-align:left;padding:10px 12px;font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.3px;border-bottom:2px solid var(--bd);background:var(--sf)}
+.tb td{padding:10px 12px;border-bottom:1px solid var(--bd);font-size:13px}
+.tb tr:hover{background:var(--acc-s)}
+.bt{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-weight:600;font-size:13px;transition:all .15s}
+.bt-p{background:var(--acc);color:#fff}.bt-p:hover{background:var(--acc-h)}
+.bt-s{background:var(--sf);color:var(--tx);border:1px solid var(--bd)}.bt-s:hover{background:var(--bg)}
+.bt-d{background:var(--rd);color:#fff}.bt-d:hover{background:#B91C1C}
+.bt-sm{padding:5px 10px;font-size:12px;border-radius:6px}
+.fi{width:100%;padding:9px 12px;border:1px solid var(--bd);border-radius:8px;font-size:13px;outline:none;transition:border .15s;background:var(--sf);color:var(--tx)}
+.fi:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-s)}
+.fl{display:block;font-size:11px;font-weight:600;color:var(--tx2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px}
+.fg{margin-bottom:14px}
+.tg{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.tg button{padding:6px 14px;border-radius:20px;border:1px solid var(--bd);background:var(--sf);font-size:12px;cursor:pointer;font-weight:500;transition:all .15s}
+.tg button.ac{background:var(--acc);color:#fff;border-color:var(--acc)}
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
+.modal{background:var(--sf);border-radius:14px;padding:28px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.15)}
+.modal h3{font-size:18px;font-weight:700;margin-bottom:18px}
+.bh{background:linear-gradient(135deg,var(--acc),var(--acc-h));color:#fff;border-radius:var(--bd-r);padding:24px;margin-bottom:20px}
+.bh h2{font-size:20px;font-weight:800;margin-bottom:4px}
+.bh p{font-size:13px;opacity:.85}
+.bh .bc{display:flex;gap:12px;margin-top:16px;flex-wrap:wrap;align-items:end}
+.ch{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.ch .ci{flex:1;min-width:200px;background:var(--sf);border-radius:var(--bd-r);padding:16px;border:1px solid var(--bd)}
+.ch .ci h4{font-size:11px;color:var(--tx3);text-transform:uppercase;font-weight:700;margin-bottom:8px}
+.badge{display:inline-flex;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:600}
+.badge-gn{background:var(--gn-s);color:var(--gn)}
+.badge-yl{background:var(--yl-s);color:var(--yl)}
+.badge-rd{background:var(--rd-s);color:var(--rd)}
+.bi{display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;border:1px solid var(--bd);margin-bottom:8px;background:var(--sf);transition:all .15s}
+.bi:hover{border-color:var(--acc);box-shadow:0 2px 8px rgba(37,99,235,.08)}
+.si{animation:slideIn .3s ease both}
+@keyframes slideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.fu{animation:fadeUp .4s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.empty{text-align:center;padding:60px 20px;color:var(--tx3)}
+.empty svg{margin-bottom:12px;opacity:.4}
+.qg{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.qa{display:flex;align-items:center;gap:10px;padding:14px 16px;border-radius:10px;border:1px solid var(--bd);background:var(--sf);cursor:pointer;font-size:13px;font-weight:600;transition:all .15s}
+.qa:hover{border-color:var(--acc);color:var(--acc);background:var(--acc-s)}
+.dn-cd{background:var(--sf);border:1px solid var(--bd);border-radius:var(--bd-r);padding:16px;margin-bottom:10px}
+.dn-cd h4{font-size:14px;font-weight:700}
+.dn-cd .dn-sm{font-size:12px;color:var(--tx2)}
+.dn-cd .dn-amt{font-size:18px;font-weight:800;color:var(--gn);margin-top:4px}
+.msg{background:var(--sf);border:1px solid var(--bd);border-radius:var(--bd-r);padding:16px;margin-bottom:12px}
+.msg .msg-hd{display:flex;justify-content:space-between;margin-bottom:6px}
+.msg .msg-au{font-weight:700;font-size:13px}
+.msg .msg-dt{font-size:11px;color:var(--tx3)}
+.msg .msg-bd{font-size:13px;line-height:1.5}
+.msg .msg-rp{margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)}
+.exp-dd{position:relative;display:inline-block}
+.exp-mn{position:absolute;top:100%;right:0;margin-top:4px;background:var(--sf);border:1px solid var(--bd);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:100;min-width:160px;padding:4px}
+.exp-mn button{display:block;width:100%;text-align:left;padding:8px 14px;border:none;background:none;cursor:pointer;font-size:13px;border-radius:4px;font-weight:500}
+.exp-mn button:hover{background:var(--acc-s);color:var(--acc)}
+.cat-ed{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--bd);border-radius:8px;margin-bottom:6px;background:var(--sf)}
+.cat-ed .cat-nm{flex:1;font-size:13px;font-weight:500}
+.cat-ed .cat-ct{font-size:11px;color:var(--tx3);margin-right:8px}
+.cat-ed button{background:none;border:none;cursor:pointer;padding:4px;border-radius:4px;display:flex;align-items:center;color:var(--tx3);transition:all .15s}
+.cat-ed button:hover{background:var(--rd-s);color:var(--rd)}
+.cat-ed .cat-eb:hover{background:var(--acc-s);color:var(--acc)}
+.mob-hd{display:none;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--sf);border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:50}
+.mob-hd h1{font-size:16px;font-weight:800;color:var(--acc)}
+.mob-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--sf);border-top:1px solid var(--bd);padding:6px 0 env(safe-area-inset-bottom,6px);z-index:50;justify-content:space-around}
+.mob-nav button{display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:none;padding:6px 12px;font-size:10px;color:var(--tx3);cursor:pointer}
+.mob-nav button.ac{color:var(--acc)}
+@media(max-width:768px){
+  .sb{position:fixed;left:0;top:0;bottom:0;z-index:100;transform:translateX(-100%)}.sb.open{transform:translateX(0)}
+  .sb-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:99}.sb-ov.open{display:block}
+  .mob-hd{display:flex}.mob-nav{display:flex}
+  .mn{padding:16px;padding-bottom:80px}
+  .sg{grid-template-columns:repeat(2,1fr);gap:10px}
+  .cd .vl{font-size:22px}
 }
-* { margin:0; padding:0; box-sizing:border-box; }
-body { background:var(--bg); color:var(--text); font-family:var(--font-body); }
-@keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-@keyframes slideIn { from{opacity:0;transform:translateX(-16px)} to{opacity:1;transform:translateX(0)} }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
-@keyframes spin { to{transform:rotate(360deg)} }
-@keyframes bagBounce { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
-.fade-up { animation:fadeUp .4s ease-out both; }
-.slide-in { animation:slideIn .3s ease-out both; }
-
-.app { display:flex; min-height:100vh; background:var(--bg); }
-.sidebar { width:260px; background:var(--text); color:#fff; display:flex; flex-direction:column; position:fixed; top:0; left:0; height:100vh; z-index:100; }
-.sidebar-header { padding:28px 24px 20px; border-bottom:1px solid rgba(255,255,255,.08); }
-.sidebar-header h1 { font-family:var(--font-display); font-size:22px; letter-spacing:-.3px; }
-.sidebar-header p { font-size:11px; color:rgba(255,255,255,.45); margin-top:4px; letter-spacing:.5px; text-transform:uppercase; }
-.sidebar-nav { flex:1; padding:16px 12px; overflow-y:auto; }
-.nav-item { display:flex; align-items:center; gap:12px; padding:11px 14px; border-radius:var(--radius-sm); cursor:pointer; font-size:13.5px; font-weight:500; color:rgba(255,255,255,.55); transition:all .2s; margin-bottom:2px; }
-.nav-item:hover { color:rgba(255,255,255,.85); background:rgba(255,255,255,.06); }
-.nav-item.active { color:#fff; background:var(--accent); }
-.nav-item .badge { margin-left:auto; background:var(--red); color:#fff; font-size:10px; font-weight:700; padding:2px 7px; border-radius:10px; }
-.nav-section { font-size:10px; text-transform:uppercase; letter-spacing:1.2px; color:rgba(255,255,255,.25); padding:20px 14px 8px; }
-.sidebar-footer { padding:16px 12px; border-top:1px solid rgba(255,255,255,.08); }
-.sync-bar { display:flex; align-items:center; gap:8px; padding:8px 14px; border-radius:var(--radius-sm); background:rgba(255,255,255,.05); font-size:12px; color:rgba(255,255,255,.5); }
-.sync-dot { width:8px; height:8px; border-radius:50%; background:var(--sync-color); }
-.sync-dot.syncing { animation:pulse 1.5s infinite; background:var(--yellow); }
-.sync-dot.offline { background:var(--red); }
-
-.main { flex:1; margin-left:260px; min-height:100vh; }
-.topbar { position:sticky; top:0; z-index:50; background:rgba(250,246,241,.92); backdrop-filter:blur(12px); padding:18px 32px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); }
-.topbar h2 { font-family:var(--font-display); font-size:22px; letter-spacing:-.3px; }
-.topbar-actions { display:flex; align-items:center; gap:10px; }
-.content { padding:28px 32px 120px; }
-
-.stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
-.stat-card { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); padding:20px; }
-.stat-card .label { font-size:11px; text-transform:uppercase; letter-spacing:.8px; color:var(--text3); font-weight:600; }
-.stat-card .value { font-size:28px; font-weight:700; margin-top:6px; }
-.stat-card .sub { font-size:12px; color:var(--text3); margin-top:4px; }
-.stat-card.good .value { color:var(--green); }
-.stat-card.alert .value { color:var(--red); }
-.stat-card.warning .value { color:var(--yellow); }
-
-.card { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); padding:20px; }
-.card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
-.card-title { font-size:16px; font-weight:600; }
-
-.btn { display:inline-flex; align-items:center; gap:6px; padding:9px 16px; border-radius:var(--radius-sm); font-size:13px; font-weight:600; border:none; cursor:pointer; transition:all .2s; font-family:var(--font-body); }
-.btn-primary { background:var(--accent); color:#fff; }
-.btn-primary:hover { background:#A3451F; }
-.btn-secondary { background:var(--bg2); color:var(--text); border:1px solid var(--border); }
-.btn-secondary:hover { background:var(--border); }
-.btn-green { background:var(--green); color:#fff; }
-.btn-green:hover { background:#2D5C38; }
-.btn-danger { background:var(--red); color:#fff; }
-.btn-ghost { background:none; color:var(--text2); }
-.btn-ghost:hover { background:var(--bg2); }
-.btn-sm { padding:6px 12px; font-size:12px; }
-
-.form-group { margin-bottom:14px; }
-.form-label { display:block; font-size:12px; font-weight:600; color:var(--text2); margin-bottom:5px; }
-.form-input { width:100%; padding:10px 14px; border:1.5px solid var(--border); border-radius:var(--radius-sm); font-size:13px; font-family:var(--font-body); background:var(--bg3); color:var(--text); transition:border-color .2s; }
-.form-input:focus { outline:none; border-color:var(--accent); }
-
-.search-bar { display:flex; align-items:center; gap:8px; padding:0 14px; background:var(--bg3); border:1.5px solid var(--border); border-radius:var(--radius-sm); }
-.search-bar input { border:none; background:none; outline:none; padding:10px 0; flex:1; font-size:13px; font-family:var(--font-body); }
-.search-bar svg { color:var(--text3); flex-shrink:0; }
-
-.table-wrap { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
-table { width:100%; border-collapse:collapse; }
-th { background:var(--bg2); padding:10px 14px; text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:var(--text3); border-bottom:1px solid var(--border); }
-td { padding:10px 14px; border-bottom:1px solid var(--bg2); font-size:13px; }
-tr:hover td { background:var(--bg); }
-.check-col { width:40px; }
-
-.tag { display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; }
-.tag-green { background:var(--green-soft); color:var(--green); }
-.tag-yellow { background:var(--yellow-soft); color:var(--yellow); }
-.tag-red { background:var(--red-soft); color:var(--red); }
-.tag-blue { background:var(--blue-soft); color:var(--blue); }
-
-.modal-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(44,24,16,.4); backdrop-filter:blur(4px); z-index:200; display:flex; align-items:center; justify-content:center; animation:fadeUp .2s ease-out; }
-.modal { background:var(--bg3); border-radius:var(--radius); width:90%; max-width:500px; max-height:85vh; overflow-y:auto; box-shadow:var(--shadow-lg); }
-.modal-header { display:flex; justify-content:space-between; align-items:center; padding:20px 24px; border-bottom:1px solid var(--border); }
-.modal-header h3 { font-size:18px; font-weight:600; }
-.modal-close { background:none; border:none; font-size:24px; color:var(--text3); cursor:pointer; padding:0 4px; }
-.modal-body { padding:24px; }
-
-.bag-hero { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; border-radius:var(--radius); padding:32px; margin-bottom:24px; }
-.bag-hero h2 { font-family:var(--font-display); font-size:24px; }
-.bag-hero p { font-size:14px; opacity:.85; margin-top:6px; }
-.bag-config { display:flex; gap:14px; margin-top:20px; flex-wrap:wrap; align-items:flex-end; }
-.bag-config .form-label { color:rgba(255,255,255,.8); }
-.bag-config .form-input { background:rgba(255,255,255,.15); border-color:rgba(255,255,255,.25); color:#fff; }
-.bag-summary { display:flex; gap:14px; flex-wrap:wrap; margin-top:16px; }
-.bag-summary .card { flex:1; min-width:150px; text-align:center; }
-
-.message-card { background:var(--bg3); border:1px solid var(--border); border-radius:var(--radius); padding:20px; margin-bottom:12px; }
-.message-header { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
-.avatar { width:36px; height:36px; border-radius:50%; background:var(--accent); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; }
-.message-author { font-weight:600; font-size:14px; }
-.message-role { font-size:11px; color:var(--text3); }
-.message-time { font-size:11px; color:var(--text3); margin-left:auto; }
-.message-text { font-size:14px; line-height:1.6; }
-.replies { margin-top:14px; padding-top:14px; border-top:1px solid var(--border); }
-.reply { display:flex; gap:10px; padding:10px 0; }
-.reply .avatar { width:28px; height:28px; font-size:10px; }
-.reply-author { font-weight:600; font-size:12px; }
-.reply-text { font-size:13px; color:var(--text2); margin-top:2px; }
-.reply-time { font-size:10px; color:var(--text3); margin-top:2px; }
-
-.notif-item { display:flex; gap:14px; padding:14px 18px; border-radius:var(--radius-sm); margin-bottom:8px; align-items:flex-start; }
-.notif-item.urgent { background:var(--red-soft); border:1px solid #F5C6C6; }
-.notif-item.warning { background:var(--yellow-soft); border:1px solid #F5E6A3; }
-.notif-icon { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-.notif-item.urgent .notif-icon { background:var(--red); color:#fff; }
-.notif-item.warning .notif-icon { background:var(--yellow); color:#fff; }
-.notif-title { font-weight:600; font-size:14px; }
-.notif-desc { font-size:12px; color:var(--text2); margin-top:3px; }
-
-.bulk-bar { position:sticky; bottom:0; left:0; right:0; background:var(--text); color:#fff; padding:14px 28px; display:flex; align-items:center; gap:16px; border-radius:12px 12px 0 0; box-shadow:0 -4px 20px rgba(0,0,0,.15); z-index:80; animation:fadeUp .3s ease-out; }
-.bulk-textarea { width:100%; min-height:160px; padding:14px; font-family:'IBM Plex Sans Mono',monospace; font-size:12px; border:2px dashed var(--border); border-radius:var(--radius-sm); background:var(--bg); resize:vertical; }
-.bulk-textarea:focus { outline:none; border-color:var(--accent); background:var(--bg3); }
-
-.cloud-sync { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text3); padding:8px 14px; border-radius:var(--radius-sm); background:var(--bg2); }
-.cloud-sync.active { color:var(--green); background:var(--green-soft); }
-.cloud-sync svg.spinning { animation:spin 1.5s linear infinite; }
-
-.email-config { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-.email-freq-option { padding:14px; border:2px solid var(--border); border-radius:var(--radius-sm); cursor:pointer; text-align:center; transition:all .2s; }
-.email-freq-option:hover { border-color:var(--accent); }
-.email-freq-option.selected { border-color:var(--accent); background:var(--accent-soft); }
-.freq-label { font-weight:700; font-size:14px; }
-.freq-desc { font-size:11px; color:var(--text3); margin-top:4px; }
-
-@media (max-width:768px) {
-  .sidebar { display:none; }
-  .main { margin-left:0; }
-  .topbar { padding:14px 18px; }
-  .topbar h2 { font-size:18px; }
-  .content { padding:16px 18px 120px; }
-  .stats-grid { grid-template-columns:1fr 1fr; }
-  .bag-config { flex-direction:column; }
-  .mobile-nav { display:flex !important; }
-}
-.mobile-nav { display:none; position:fixed; bottom:0; left:0; right:0; background:var(--text); z-index:150; padding:8px 0 max(8px,env(safe-area-inset-bottom)); justify-content:space-around; }
-.mobile-nav-item { display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 12px; color:rgba(255,255,255,.4); font-size:10px; font-weight:600; cursor:pointer; border:none; background:none; }
-.mobile-nav-item.active { color:var(--accent2); }
 `;
 
-// ═══════════════════════════════════════════
-//  MAIN APP COMPONENT
-// ═══════════════════════════════════════════
-export default function ChurchPantry() {
-  const [page, setPage] = useState("dashboard");
-  const [inventory, setInventory] = useState(SAMPLE_INVENTORY);
-  const [donors, setDonors] = useState(SAMPLE_DONORS);
-  const [recipients, setRecipients] = useState(SAMPLE_RECIPIENTS);
-  const [messages, setMessages] = useState(SAMPLE_MESSAGES);
-  const [selected, setSelected] = useState(new Set());
-  const [search, setSearch] = useState("");
-  const [modal, setModal] = useState(null);
-  const [syncStatus, setSyncStatus] = useState("synced");
-  const [emailFreq, setEmailFreq] = useState("monthly");
+// ── Page Components ──
+
+function Dashboard({ inv, donors, alerts, setPage }) {
+  const totalQty = inv.reduce((s, i) => s + i.qty, 0);
+  const uniqueItems = inv.length;
+  const totalVal = inv.reduce((s, i) => s + i.qty * i.price, 0);
+  const expSoon = inv.filter(i => { const d = daysUntil(i.expiry); return d > 0 && d <= 30; }).length;
+  const lowStock = inv.filter(i => i.qty <= 5 && i.qty > 0).length;
+
+  return (
+    <div className="fu">
+      <div className="tp">
+        <h2>Dashboard</h2>
+        <div className="sync"><I.Cloud /> Synced</div>
+      </div>
+      <div className="sg">
+        <div className="cd"><div className="lb">Total Items</div><div className="vl">{totalQty}</div><div className="sm">{uniqueItems} unique products</div></div>
+        <div className="cd"><div className="lb">Inventory Value</div><div className="vl">{fmtCurrency(totalVal)}</div><div className="sm">Based on local pricing</div></div>
+        <div className="cd" style={{borderLeft: expSoon > 0 ? "4px solid var(--yl)" : undefined}}><div className="lb">Expiring Soon</div><div className="vl">{expSoon}</div><div className="sm">Within 30 days</div></div>
+        <div className="cd" style={{borderLeft: lowStock > 0 ? "4px solid var(--rd)" : undefined}}><div className="lb">Low Stock</div><div className="vl">{lowStock}</div><div className="sm">5 or fewer units</div></div>
+      </div>
+
+      {alerts.length > 0 && (<div className="cd" style={{ marginBottom: 20 }}><div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}><h3 style={{ fontSize: 15, fontWeight: 700 }}>Recent Alerts</h3><button className="bt bt-sm bt-s" onClick={() => setPage("alerts")}>View All</button></div>
+        {alerts.slice(0, 3).map((a, i) => (<div key={i} className="al-it"><div className="al-dot" /><div><div className="al-tx">{a.title}</div><div className="al-sm">{a.detail}</div></div></div>))}
+      </div>)}
+
+      <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Quick Actions</h3>
+      <div className="qg">
+        <div className="qa" onClick={() => setPage("scan")}><I.Scan /> Scan & Add Items</div>
+        <div className="qa" onClick={() => setPage("bag")}><I.Bag /> Build a Bag & Go</div>
+        <div className="qa" onClick={() => setPage("discussion")}><I.Chat /> Discussion Board</div>
+        <div className="qa" onClick={() => setPage("donors")}><I.Heart /> Manage Donors</div>
+      </div>
+
+      {donors.length > 0 && (<div style={{ marginTop: 24 }}><h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Top Donors</h3>
+        {donors.slice(0, 3).map(d => (<div key={d.id} className="dn-cd"><h4>{d.name}</h4><div className="dn-sm">{d.donations} donations</div><div className="dn-amt">{fmtCurrency(d.total)}</div></div>))}
+      </div>)}
+    </div>
+  );
+}
+
+function Inventory({ inv, categories, srch, setSrch, sel, selAll, togSel, delItem, setModal }) {
+  const [catF, setCatF] = useState("All");
+  const [showExp, setShowExp] = useState(false);
+  const expRef = useRef(null);
 
   useEffect(() => {
-    const interval = setInterval(() => { setSyncStatus("syncing"); setTimeout(() => setSyncStatus("synced"), 2000); }, 30000);
-    return () => clearInterval(interval);
+    function handleClick(e) { if (expRef.current && !expRef.current.contains(e.target)) setShowExp(false); }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
   }, []);
-  const triggerSync = () => { setSyncStatus("syncing"); setTimeout(() => setSyncStatus("synced"), 2500); };
 
-  const notifications = useMemo(() => {
-    const notifs = [];
-    inventory.forEach(item => {
-      const d = daysUntil(item.expiry);
-      if (d <= 0) notifs.push({type:"urgent",title:`EXPIRED: ${item.name}`,desc:`Expired ${Math.abs(d)} days ago. Remove immediately.`,item});
-      else if (d <= 7) notifs.push({type:"urgent",title:`Expiring in ${d} days: ${item.name}`,desc:`${item.qty} units expire ${fmt(item.expiry)}. Prioritize distribution.`,item});
-      else if (d <= 30) notifs.push({type:"warning",title:`Expiring soon: ${item.name}`,desc:`${item.qty} units expire ${fmt(item.expiry)}.`,item});
-    });
-    inventory.forEach(item => { if (item.qty <= 5) notifs.push({type:"warning",title:`Low stock: ${item.name}`,desc:`Only ${item.qty} units remaining.`,item}); });
-    return notifs;
-  }, [inventory]);
-
-  const expiringCount = notifications.filter(n => n.type === "urgent").length;
-  const filteredInventory = inventory.filter(i => i.name.toLowerCase().includes(search.toLowerCase()) || i.upc.includes(search) || i.category.toLowerCase().includes(search.toLowerCase()));
-  const totalValue = inventory.reduce((s,i) => s + i.qty * i.price, 0);
-  const totalItems = inventory.reduce((s,i) => s + i.qty, 0);
-
-  const handleSelectAll = (e) => { if(e.target.checked) setSelected(new Set(filteredInventory.map(i=>i.id))); else setSelected(new Set()); };
-  const toggleSelect = (id) => { const next = new Set(selected); next.has(id)?next.delete(id):next.add(id); setSelected(next); };
-  const bulkDelete = () => { setInventory(prev => prev.filter(i => !selected.has(i.id))); setSelected(new Set()); };
-  const addItem = (item) => { setInventory(prev => [...prev, {...item, id: uid()}]); triggerSync(); };
-  const bulkAdd = (items) => { setInventory(prev => [...prev, ...items.map(i => ({...i, id: uid()}))]); triggerSync(); };
-  const deleteItem = (id) => { setInventory(prev => prev.filter(i => i.id !== id)); triggerSync(); };
-  const addMessage = (text) => { setMessages(prev => [{id:uid(),author:"You",role:"Manager",text,time:new Date().toISOString(),replies:[]}, ...prev]); };
-  const addReply = (msgId, text) => { setMessages(prev => prev.map(m => m.id === msgId ? {...m, replies:[...m.replies, {id:uid(),author:"You",text,time:new Date().toISOString()}]} : m)); };
-
-  const navItems = [
-    {key:"dashboard",label:"Dashboard",icon:<Icons.Home/>},
-    {key:"inventory",label:"Inventory",icon:<Icons.Package/>},
-    {key:"scan",label:"Scan & Add",icon:<Icons.Scan/>},
-    {key:"baggo",label:"Bag & Go",icon:<BagIcon/>},
-    {key:"donors",label:"Donors",icon:<Icons.Heart/>},
-    {key:"recipients",label:"Recipients",icon:<Icons.Users/>},
-    {key:"discussion",label:"Discussion",icon:<Icons.Chat/>},
-    {key:"notifications",label:"Alerts",icon:<Icons.Bell/>,badge:expiringCount||null},
-    {key:"analytics",label:"Analytics",icon:<Icons.Chart/>},
-    {key:"settings",label:"Settings",icon:<SettingsIcon/>},
-  ];
-  const pageTitle = navItems.find(n=>n.key===page)?.label || "Dashboard";
+  const filtered = catF === "All" ? inv : inv.filter(i => i.category === catF);
+  const allSel = filtered.length > 0 && filtered.every(i => sel.includes(i.id));
 
   return (
-    <>
-      <style>{CSS}</style>
-      <div className="app">
-        <aside className="sidebar">
-          <div className="sidebar-header"><h1>Church Pantry</h1><p>Inventory Management</p></div>
-          <nav className="sidebar-nav">
-            <div className="nav-section">Main</div>
-            {navItems.slice(0,4).map(n=>(<div key={n.key} className={`nav-item ${page===n.key?"active":""}`} onClick={()=>{setPage(n.key);setSelected(new Set())}}>{n.icon}<span>{n.label}</span>{n.badge&&<span className="badge">{n.badge}</span>}</div>))}
-            <div className="nav-section">Community</div>
-            {navItems.slice(4,8).map(n=>(<div key={n.key} className={`nav-item ${page===n.key?"active":""}`} onClick={()=>{setPage(n.key);setSelected(new Set())}}>{n.icon}<span>{n.label}</span>{n.badge&&<span className="badge">{n.badge}</span>}</div>))}
-            <div className="nav-section">System</div>
-            {navItems.slice(8).map(n=>(<div key={n.key} className={`nav-item ${page===n.key?"active":""}`} onClick={()=>{setPage(n.key);setSelected(new Set())}}>{n.icon}<span>{n.label}</span></div>))}
-          </nav>
-          <div className="sidebar-footer">
-            <div className="sync-bar" onClick={triggerSync} style={{cursor:"pointer"}}>
-              <span className={`sync-dot ${syncStatus}`}/><SyncIcon spinning={syncStatus==="syncing"}/>{syncStatus==="synced"?"Cloud synced":syncStatus==="syncing"?"Syncing...":"Offline"}
-            </div>
+    <div className="fu">
+      <div className="tp">
+        <h2>Inventory</h2>
+        <div style={{ display: "flex", gap: 8 }}>
+          <div className="exp-dd" ref={expRef}>
+            <button className="bt bt-s bt-sm" onClick={() => setShowExp(!showExp)}>Export <I.Down /></button>
+            {showExp && (<div className="exp-mn"><button onClick={() => { exportCSV(filtered); setShowExp(false); }}>Download CSV</button><button onClick={() => { exportPDF(filtered); setShowExp(false); }}>Print / PDF</button></div>)}
           </div>
-        </aside>
-
-        <main className="main">
-          <div className="topbar">
-            <h2>{pageTitle}</h2>
-            <div className="topbar-actions">
-              <div className={`cloud-sync ${syncStatus==="synced"?"active":""}`} onClick={triggerSync} style={{cursor:"pointer"}}>
-                <SyncIcon spinning={syncStatus==="syncing"}/>{syncStatus==="synced"?"Synced":syncStatus==="syncing"?"Syncing...":"Offline"}
-              </div>
-              {page==="inventory" && <>
-                <button className="btn btn-secondary btn-sm" onClick={()=>setModal("bulkAdd")}>Bulk Add</button>
-                <button className="btn btn-primary btn-sm" onClick={()=>setModal("addItem")}><Icons.Plus/> Add Item</button>
-              </>}
-              {page==="donors" && <button className="btn btn-primary btn-sm" onClick={()=>setModal("addDonor")}><Icons.Plus/> Add Donor</button>}
-              {page==="recipients" && <button className="btn btn-primary btn-sm" onClick={()=>setModal("addRecipient")}><Icons.Plus/> Add Recipient</button>}
-            </div>
-          </div>
-          <div className="content">
-            {page==="dashboard" && <DashboardPage inventory={inventory} donors={donors} recipients={recipients} notifications={notifications} totalValue={totalValue} totalItems={totalItems} setPage={setPage}/>}
-            {page==="inventory" && <InventoryPage inventory={filteredInventory} search={search} setSearch={setSearch} selected={selected} handleSelectAll={handleSelectAll} toggleSelect={toggleSelect} deleteItem={deleteItem} setModal={setModal}/>}
-            {page==="scan" && <ScanPage addItem={addItem} triggerSync={triggerSync}/>}
-            {page==="baggo" && <BagGoPage inventory={inventory} recipients={recipients} setInventory={setInventory} triggerSync={triggerSync}/>}
-            {page==="donors" && <DonorsPage donors={donors}/>}
-            {page==="recipients" && <RecipientsPage recipients={recipients}/>}
-            {page==="discussion" && <DiscussionPage messages={messages} addMessage={addMessage} addReply={addReply}/>}
-            {page==="notifications" && <NotificationsPage notifications={notifications}/>}
-            {page==="analytics" && <AnalyticsPage inventory={inventory} donors={donors} recipients={recipients}/>}
-            {page==="settings" && <SettingsPage emailFreq={emailFreq} setEmailFreq={setEmailFreq} syncStatus={syncStatus} triggerSync={triggerSync}/>}
-          </div>
-          {selected.size > 0 && (
-            <div className="bulk-bar">
-              <span>{selected.size} item{selected.size>1?"s":""} selected</span>
-              <button className="btn btn-secondary btn-sm" onClick={()=>setModal("bulkEdit")}><Icons.Edit/> Bulk Edit</button>
-              <button className="btn btn-danger btn-sm" onClick={bulkDelete}><Icons.Trash/> Delete Selected</button>
-              <div style={{flex:1}}/>
-              <button className="btn btn-ghost btn-sm" style={{color:"#fff"}} onClick={()=>setSelected(new Set())}>Cancel</button>
-            </div>
-          )}
-        </main>
-        <nav className="mobile-nav">
-          {[navItems[0],navItems[1],navItems[3],navItems[6],navItems[7]].map(n=>(<button key={n.key} className={`mobile-nav-item ${page===n.key?"active":""}`} onClick={()=>setPage(n.key)}>{n.icon}<span>{n.label}</span></button>))}
-        </nav>
-      </div>
-
-      {modal==="addItem" && <AddItemModal onClose={()=>setModal(null)} onAdd={addItem}/>}
-      {modal==="bulkAdd" && <BulkAddModal onClose={()=>setModal(null)} onBulkAdd={bulkAdd}/>}
-      {modal==="bulkEdit" && <BulkEditModal onClose={()=>setModal(null)} selected={selected} inventory={inventory} setInventory={setInventory} setSelected={setSelected} triggerSync={triggerSync}/>}
-      {modal==="addDonor" && <AddDonorModal onClose={()=>setModal(null)} onAdd={(d)=>{setDonors(p=>[...p,{...d,id:uid()}]);}}/>}
-      {modal==="addRecipient" && <AddRecipientModal onClose={()=>setModal(null)} onAdd={(r)=>{setRecipients(p=>[...p,{...r,id:uid()}]);}}/>}
-      {modal==="shareAccess" && <ShareModal onClose={()=>setModal(null)}/>}
-      {modal==="emailConfig" && <EmailConfigModal onClose={()=>setModal(null)} freq={emailFreq} setFreq={setEmailFreq}/>}
-    </>
-  );
-}
-
-// ═══════════════════════════════════════════
-//  PAGES
-// ═══════════════════════════════════════════
-
-function DashboardPage({inventory, donors, recipients, notifications, totalValue, totalItems, setPage}) {
-  const expiringSoon = inventory.filter(i => daysUntil(i.expiry) <= 30 && daysUntil(i.expiry) > 0).length;
-  const lowStock = inventory.filter(i => i.qty <= 5).length;
-  return (
-    <div className="fade-up">
-      <div className="stats-grid">
-        <div className="stat-card good"><div className="label">Total Items</div><div className="value">{totalItems.toLocaleString()}</div><div className="sub">{inventory.length} unique products</div></div>
-        <div className="stat-card"><div className="label">Inventory Value</div><div className="value">{fmtCurrency(totalValue)}</div><div className="sub">Based on local pricing</div></div>
-        <div className={`stat-card ${expiringSoon>0?"warning":""}`}><div className="label">Expiring Soon</div><div className="value">{expiringSoon}</div><div className="sub">Within 30 days</div></div>
-        <div className={`stat-card ${lowStock>0?"alert":""}`}><div className="label">Low Stock</div><div className="value">{lowStock}</div><div className="sub">5 or fewer units</div></div>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
-        <div className="card">
-          <div className="card-header"><h3 className="card-title">Recent Alerts</h3><button className="btn btn-ghost btn-sm" onClick={()=>setPage("notifications")}>View All</button></div>
-          {notifications.slice(0,4).map((n,i) => (<div key={i} className={`notif-item ${n.type}`} style={{marginBottom:8}}><div className="notif-icon"><Icons.AlertTriangle/></div><div className="notif-text"><div className="notif-title">{n.title}</div><div className="notif-desc">{n.desc}</div></div></div>))}
-          {notifications.length===0 && <p style={{color:"var(--text3)",fontSize:14,padding:20,textAlign:"center"}}>No alerts right now!</p>}
-        </div>
-        <div className="card">
-          <div className="card-header"><h3 className="card-title">Quick Actions</h3></div>
-          <div style={{display:"grid",gap:10}}>
-            <button className="btn btn-primary" style={{width:"100%",justifyContent:"center"}} onClick={()=>setPage("scan")}><Icons.Scan/> Scan & Add Items</button>
-            <button className="btn btn-green" style={{width:"100%",justifyContent:"center"}} onClick={()=>setPage("baggo")}><BagIcon/> Build a Bag & Go</button>
-            <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={()=>setPage("discussion")}><Icons.Chat/> Discussion Board</button>
-            <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={()=>setPage("donors")}><Icons.Heart/> Manage Donors</button>
-          </div>
-          <div style={{marginTop:20}}>
-            <div className="card-header"><h3 className="card-title" style={{fontSize:15}}>Top Donors</h3></div>
-            {donors.slice(0,3).map(d=>(<div key={d.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid var(--border)"}}><div><div style={{fontWeight:600,fontSize:13}}>{d.name}</div><div style={{fontSize:11,color:"var(--text3)"}}>{d.totalDonations} donations</div></div><div style={{fontWeight:700,color:"var(--green)",fontSize:14}}>{fmtCurrency(d.totalValue)}</div></div>))}
-          </div>
+          {sel.length > 0 && <button className="bt bt-d bt-sm" onClick={() => sel.forEach(id => delItem(id))}>Delete ({sel.length})</button>}
+          <button className="bt bt-p bt-sm" onClick={() => setModal("add")}><I.Plus /> Add Item</button>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ── INVENTORY PAGE (WITH EXPORT) ──
-function InventoryPage({inventory, search, setSearch, selected, handleSelectAll, toggleSelect, deleteItem, setModal}) {
-  const [catFilter, setCatFilter] = useState("All");
-  const [showExport, setShowExport] = useState(false);
-  const exportRef = useRef(null);
-
-  useEffect(() => {
-    const h = (e) => { if(exportRef.current && !exportRef.current.contains(e.target)) setShowExport(false); };
-    if(showExport) document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [showExport]);
-
-  const filtered = catFilter==="All" ? inventory : inventory.filter(i => i.category === catFilter);
-  const filterLabel = catFilter==="All" ? "All Categories" : catFilter;
-
-  const handleExportCSV = () => { exportCSV(filtered, `church-pantry-${catFilter==="All"?"all":catFilter.toLowerCase().replace(/\s+/g,"-")}`); setShowExport(false); };
-  const handleExportPDF = () => { exportPDF(filtered, filterLabel); setShowExport(false); };
-
-  return (
-    <div className="fade-up">
-      <div style={{display:"flex",gap:12,marginBottom:20,flexWrap:"wrap",alignItems:"center"}}>
-        <div className="search-bar" style={{flex:1,minWidth:200}}>
-          <Icons.Search/><input className="form-input" placeholder="Search by name, UPC, or category..." value={search} onChange={e=>setSearch(e.target.value)} style={{border:"none",padding:"10px 0"}}/>
-        </div>
-        <select className="form-input" style={{width:"auto",minWidth:160}} value={catFilter} onChange={e=>setCatFilter(e.target.value)}>
-          <option value="All">All Categories</option>
-          {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
-        </select>
-        {/* ── EXPORT DROPDOWN ── */}
-        <div ref={exportRef} style={{position:"relative"}}>
-          <button className="btn btn-secondary btn-sm" onClick={()=>setShowExport(!showExport)} style={{display:"flex",alignItems:"center",gap:6}}>
-            <Icons.Download/> Export
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft:2,transform:showExport?"rotate(180deg)":"rotate(0)",transition:"transform .2s"}}><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-          {showExport && (
-            <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:"var(--bg3)",border:"1px solid var(--border)",borderRadius:"var(--radius-sm)",boxShadow:"var(--shadow-lg)",minWidth:220,zIndex:100,overflow:"hidden",animation:"fadeUp .15s ease-out"}}>
-              <div style={{padding:"8px 12px",borderBottom:"1px solid var(--border)",fontSize:11,fontWeight:600,color:"var(--text3)",textTransform:"uppercase",letterSpacing:".5px"}}>
-                Export {filtered.length} items · {filterLabel}
-              </div>
-              <button onClick={handleExportCSV} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 12px",background:"none",border:"none",cursor:"pointer",fontSize:13,color:"var(--text)",textAlign:"left"}} onMouseEnter={e=>e.currentTarget.style.background="var(--bg2)"} onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                <div><div style={{fontWeight:600}}>Download CSV</div><div style={{fontSize:11,color:"var(--text3)",marginTop:1}}>Spreadsheet-ready, all fields</div></div>
-              </button>
-              <button onClick={handleExportPDF} style={{display:"flex",alignItems:"center",gap:10,width:"100%",padding:"10px 12px",background:"none",border:"none",cursor:"pointer",fontSize:13,color:"var(--text)",textAlign:"left"}} onMouseEnter={e=>e.currentTarget.style.background="var(--bg2)"} onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                <div><div style={{fontWeight:600}}>Print / PDF Report</div><div style={{fontSize:11,color:"var(--text3)",marginTop:1}}>Formatted report with summaries</div></div>
-              </button>
-            </div>
-          )}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
+          <I.Search />
+          <input className="fi" style={{ paddingLeft: 36 }} placeholder="Search inventory..." value={srch} onChange={e => setSrch(e.target.value)} />
         </div>
       </div>
-      <div className="table-wrap">
-        <table>
-          <thead><tr>
-            <th className="check-col"><input type="checkbox" onChange={handleSelectAll} checked={selected.size===filtered.length && filtered.length>0}/></th>
-            <th>Item Name</th><th>UPC</th><th>Category</th><th>Qty</th><th>Price</th><th>Expiry</th><th>Location</th><th>Status</th><th style={{width:60}}></th>
-          </tr></thead>
-          <tbody>
-            {filtered.map((item,idx) => {
-              const d = daysUntil(item.expiry);
-              const status = d<=0?"expired":d<=7?"urgent":d<=30?"warning":"good";
-              const qtyStatus = item.qty<=5?"low":item.qty<=15?"medium":"good";
-              return (
-                <tr key={item.id} className="slide-in" style={{animationDelay:`${idx*30}ms`}}>
-                  <td><input type="checkbox" checked={selected.has(item.id)} onChange={()=>toggleSelect(item.id)}/></td>
-                  <td style={{fontWeight:600}}>{item.name}</td>
-                  <td style={{fontFamily:"monospace",fontSize:12,color:"var(--text3)"}}>{item.upc}</td>
-                  <td><span className="tag tag-blue">{item.category}</span></td>
-                  <td><span className={`tag ${qtyStatus==="low"?"tag-red":qtyStatus==="medium"?"tag-yellow":"tag-green"}`}>{item.qty}</span></td>
-                  <td>{fmtCurrency(item.price)}</td>
-                  <td style={{fontSize:12}}>{fmt(item.expiry)}</td>
-                  <td style={{fontSize:12,color:"var(--text3)"}}>{item.location}</td>
-                  <td>{status==="expired"?<span className="tag tag-red">Expired</span>:status==="urgent"?<span className="tag tag-red">{d}d left</span>:status==="warning"?<span className="tag tag-yellow">{d}d left</span>:<span className="tag tag-green">OK</span>}</td>
-                  <td><button className="btn btn-ghost btn-sm" onClick={()=>deleteItem(item.id)} title="Delete"><Icons.Trash/></button></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {filtered.length===0 && <p style={{textAlign:"center",padding:40,color:"var(--text3)"}}>No items found.</p>}
+      <div className="tg">
+        <button className={catF === "All" ? "ac" : ""} onClick={() => setCatF("All")}>All ({inv.length})</button>
+        {categories.map(c => { const count = inv.filter(i => i.category === c).length; return count > 0 ? <button key={c} className={catF === c ? "ac" : ""} onClick={() => setCatF(c)}>{c} ({count})</button> : null; })}
       </div>
-    </div>
-  );
-}
-
-// ── SCAN PAGE ──
-function ScanPage({addItem, triggerSync}) {
-  const [upc, setUpc] = useState("");
-  const [form, setForm] = useState({name:"",category:"Canned Goods",qty:1,price:"",expiry:"",location:""});
-  const [scanned, setScanned] = useState(false);
-  const videoRef = useRef(null);
-  const [cameraActive, setCameraActive] = useState(false);
-
-  const simulateScan = () => { setScanned(true); setUpc("041000"+String(Math.floor(Math.random()*999999)).padStart(6,"0")); setForm(f=>({...f,name:"Scanned Item — "+["Corn","Beans","Soup","Rice","Pasta"][Math.floor(Math.random()*5)],price:(Math.random()*5+.99).toFixed(2)})); };
-  const startCamera = async () => { try { const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}}); if(videoRef.current){videoRef.current.srcObject=stream;setCameraActive(true);} } catch(e) { simulateScan(); } };
-  const handleSubmit = () => { if(!form.name)return; addItem({upc:upc||"000000000000",...form,qty:Number(form.qty),price:Number(form.price),addedBy:"You",addedDate:new Date().toISOString().slice(0,10)}); setForm({name:"",category:"Canned Goods",qty:1,price:"",expiry:"",location:""}); setUpc(""); setScanned(false); };
-
-  return (
-    <div className="fade-up" style={{maxWidth:600}}>
-      <div className="card" style={{marginBottom:20}}>
-        <h3 className="card-title" style={{marginBottom:16}}>Barcode Scanner</h3>
-        <div style={{background:"var(--bg)",borderRadius:"var(--radius)",padding:40,textAlign:"center",border:"2px dashed var(--border)",marginBottom:16,position:"relative",overflow:"hidden",minHeight:200,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-          {cameraActive ? <video ref={videoRef} autoPlay playsInline style={{width:"100%",borderRadius:8}}/> : <>
-            <Icons.Scan/><p style={{color:"var(--text3)",fontSize:14,margin:"12px 0"}}>Point camera at barcode or enter UPC manually</p>
-            <div style={{display:"flex",gap:10}}><button className="btn btn-primary" onClick={startCamera}><Icons.Scan/> Open Camera</button><button className="btn btn-secondary" onClick={simulateScan}>Simulate Scan</button></div>
-          </>}
-        </div>
-        {scanned && <div style={{background:"var(--green-soft)",padding:12,borderRadius:8,marginBottom:12,fontSize:13,color:"var(--green)",fontWeight:600}}>Scanned: {upc}</div>}
-        <div className="form-group"><label className="form-label">UPC Code</label><input className="form-input" value={upc} onChange={e=>setUpc(e.target.value)} placeholder="Enter or scan UPC"/></div>
-      </div>
-      <div className="card">
-        <h3 className="card-title" style={{marginBottom:16}}>Item Details</h3>
-        <div className="form-group"><label className="form-label">Item Name *</label><input className="form-input" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/></div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <div className="form-group"><label className="form-label">Category</label><select className="form-input" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>{CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">Quantity</label><input className="form-input" type="number" min="1" value={form.qty} onChange={e=>setForm(f=>({...f,qty:e.target.value}))}/></div>
-          <div className="form-group"><label className="form-label">Price ($)</label><input className="form-input" type="number" step="0.01" value={form.price} onChange={e=>setForm(f=>({...f,price:e.target.value}))}/></div>
-          <div className="form-group"><label className="form-label">Expiry Date</label><input className="form-input" type="date" value={form.expiry} onChange={e=>setForm(f=>({...f,expiry:e.target.value}))}/></div>
-        </div>
-        <div className="form-group"><label className="form-label">Location</label><input className="form-input" value={form.location} onChange={e=>setForm(f=>({...f,location:e.target.value}))} placeholder="e.g. Shelf A2"/></div>
-        <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",marginTop:8}} onClick={handleSubmit}><Icons.Plus/> Add to Inventory</button>
-      </div>
-    </div>
-  );
-}
-
-// ── BAG & GO PAGE ──
-function BagGoPage({inventory, recipients, setInventory, triggerSync}) {
-  const [familySize, setFamilySize] = useState(4);
-  const [dietary, setDietary] = useState("");
-  const [selectedRecipient, setSelectedRecipient] = useState("");
-  const [bag, setBag] = useState(null);
-  const [packed, setPacked] = useState(false);
-
-  useEffect(() => { if(selectedRecipient){const r=recipients.find(r=>r.id===selectedRecipient); if(r){setFamilySize(r.size);setDietary(r.dietaryNotes);}} }, [selectedRecipient, recipients]);
-
-  const generate = () => { setBag(buildBag(inventory, familySize, dietary)); setPacked(false); };
-  const confirmPack = () => {
-    if(!bag) return;
-    setInventory(prev => { const next=[...prev]; bag.bag.forEach(b=>{const idx=next.findIndex(i=>i.id===b.id); if(idx>=0) next[idx]={...next[idx],qty:next[idx].qty-b.bagQty};}); return next.filter(i=>i.qty>0); });
-    setPacked(true); triggerSync();
-  };
-  const totalBagItems = bag ? bag.bag.reduce((s,i)=>s+i.bagQty,0) : 0;
-  const totalBagValue = bag ? bag.bag.reduce((s,i)=>s+i.bagQty*i.price,0) : 0;
-
-  return (
-    <div className="fade-up">
-      <div className="bag-hero">
-        <h2>Bag & Go</h2><p>Smart packing suggestions based on family size, dietary needs, and FIFO rotation</p>
-        <div className="bag-config">
-          <div className="form-group" style={{minWidth:180}}><label className="form-label">Select Recipient (optional)</label><select className="form-input" value={selectedRecipient} onChange={e=>setSelectedRecipient(e.target.value)}><option value="">— Custom —</option>{recipients.map(r=><option key={r.id} value={r.id}>{r.name} (family of {r.size})</option>)}</select></div>
-          <div className="form-group" style={{minWidth:100}}><label className="form-label">Family Size</label><input className="form-input" type="number" min="1" max="15" value={familySize} onChange={e=>setFamilySize(Number(e.target.value))}/></div>
-          <div className="form-group" style={{minWidth:200}}><label className="form-label">Dietary Notes</label><input className="form-input" value={dietary} onChange={e=>setDietary(e.target.value)} placeholder="e.g. Vegetarian, Nut allergy"/></div>
-          <button className="btn btn-primary" onClick={generate} style={{height:42,marginBottom:14}}>Generate Bag</button>
-        </div>
-      </div>
-      {bag && (
-        <div className="fade-up">
-          <div className="bag-summary">
-            <div className="card"><div className="label">Items</div><div className="value" style={{fontSize:24,fontWeight:700}}>{totalBagItems}</div></div>
-            <div className="card"><div className="label">Value</div><div className="value" style={{fontSize:24,fontWeight:700,color:"var(--green)"}}>{fmtCurrency(totalBagValue)}</div></div>
-            <div className="card"><div className="label">FIFO Items</div><div className="value" style={{fontSize:24,fontWeight:700,color:"var(--yellow)"}}>{bag.bag.filter(i=>i.fifo).length}</div></div>
-            {bag.unmet.length>0 && <div className="card" style={{borderColor:"var(--red)"}}><div className="label">Gaps</div><div className="value" style={{fontSize:24,fontWeight:700,color:"var(--red)"}}>{bag.unmet.length}</div></div>}
-          </div>
-          <div className="table-wrap" style={{marginTop:16}}>
-            <table><thead><tr><th>Item</th><th>Category</th><th>Qty</th><th>FIFO</th></tr></thead>
-              <tbody>{bag.bag.map((item,i)=>(<tr key={i} style={item.fifo?{background:"var(--yellow-soft)"}:{}}><td style={{fontWeight:600}}>{item.name}{item.optional?" (optional)":""}</td><td><span className="tag tag-blue">{item.category}</span></td><td>{item.bagQty}</td><td>{item.fifo?<span className="tag tag-yellow">Use First</span>:<span className="tag tag-green">OK</span>}</td></tr>))}</tbody>
-            </table>
-          </div>
-          {bag.unmet.length>0 && <div style={{marginTop:12,padding:14,background:"var(--red-soft)",borderRadius:8,fontSize:13,color:"var(--red)"}}><strong>Gaps:</strong> {bag.unmet.map(u=>`${u.category} (need ${u.needed} more)`).join(", ")}</div>}
-          {!packed ? <button className="btn btn-green" style={{width:"100%",justifyContent:"center",marginTop:16,padding:"14px 24px",fontSize:15}} onClick={confirmPack}><BagIcon/> Confirm & Pack Bag</button>
-          : <div style={{marginTop:16,padding:20,background:"var(--green-soft)",borderRadius:12,textAlign:"center",color:"var(--green)",fontWeight:600,fontSize:16,animation:"bagBounce .5s ease-out"}}>Bag packed! Inventory updated.</div>}
+      {filtered.length === 0 ? (<div className="empty"><I.Pkg /><p>No items found</p></div>) : (
+        <div style={{ overflowX: "auto" }}>
+          <table className="tb">
+            <thead><tr><th><input type="checkbox" checked={allSel} onChange={() => selAll(filtered.map(i => i.id))} /></th><th>Item</th><th>Category</th><th>Qty</th><th>Price</th><th>Expiry</th><th>Location</th></tr></thead>
+            <tbody>{filtered.map(i => {
+              const d = daysUntil(i.expiry);
+              return (<tr key={i.id} className="si" style={{ animationDelay: "0ms" }}>
+                <td><input type="checkbox" checked={sel.includes(i.id)} onChange={() => togSel(i.id)} /></td>
+                <td><div style={{ fontWeight: 600 }}>{i.name}</div><div style={{ fontSize: 11, color: "var(--tx3)" }}>{i.upc}</div></td>
+                <td><span className="badge badge-gn">{i.category}</span></td>
+                <td style={{ fontWeight: 700, color: i.qty <= 5 ? "var(--rd)" : "var(--tx)" }}>{i.qty}</td>
+                <td>{fmtCurrency(i.price)}</td>
+                <td><span className={`badge ${d <= 7 ? "badge-rd" : d <= 30 ? "badge-yl" : "badge-gn"}`}>{fmt(i.expiry)}</span></td>
+                <td>{i.location || "—"}</td>
+              </tr>);
+            })}</tbody>
+          </table>
         </div>
       )}
     </div>
   );
 }
 
-// ── DONORS PAGE ──
-function DonorsPage({donors}) {
+function ScanAdd({ onAdd, categories }) {
+  const [upc, setUpc] = useState("");
+  const [name, setName] = useState("");
+  const [cat, setCat] = useState(categories[0] || "");
+  const [qty, setQty] = useState(1);
+  const [price, setPrice] = useState("");
+  const [expiry, setExpiry] = useState("");
+  const [loc, setLoc] = useState("");
+  const [msg, setMsg] = useState("");
+
+  const handleAdd = async () => {
+    if (!name) { setMsg("Name is required"); return; }
+    await onAdd({ upc, name, category: cat, qty: Number(qty), price: Number(price) || 0, expiry: expiry || "2027-01-01", location: loc, added_by: "Manager", added_date: new Date().toISOString().slice(0, 10) });
+    setMsg("Item added!");
+    setUpc(""); setName(""); setQty(1); setPrice(""); setExpiry(""); setLoc("");
+    setTimeout(() => setMsg(""), 2000);
+  };
+
   return (
-    <div className="fade-up">
-      <div className="stats-grid">
-        <div className="stat-card good"><div className="label">Total Donors</div><div className="value">{donors.length}</div></div>
-        <div className="stat-card"><div className="label">Total Donations</div><div className="value">{donors.reduce((s,d)=>s+d.totalDonations,0)}</div></div>
-        <div className="stat-card"><div className="label">Total Value</div><div className="value">{fmtCurrency(donors.reduce((s,d)=>s+d.totalValue,0))}</div></div>
-      </div>
-      <div className="table-wrap">
-        <table><thead><tr><th>Donor Name</th><th>Type</th><th>Donations</th><th>Last Donation</th><th>Total Value</th><th>Email</th></tr></thead>
-          <tbody>{donors.map(d=>(<tr key={d.id}><td style={{fontWeight:600}}>{d.name}</td><td><span className={`tag ${d.type==="Corporate"?"tag-blue":d.type==="Organization"?"tag-green":"tag-yellow"}`}>{d.type}</span></td><td>{d.totalDonations}</td><td>{fmt(d.lastDonation)}</td><td style={{fontWeight:700,color:"var(--green)"}}>{fmtCurrency(d.totalValue)}</td><td style={{fontSize:12,color:"var(--text3)"}}>{d.email}</td></tr>))}</tbody>
-        </table>
+    <div className="fu">
+      <div className="bh"><h2>Scan & Add Items</h2><p>Add new items to your inventory manually or by UPC</p></div>
+      <div className="cd" style={{ maxWidth: 500 }}>
+        <div className="fg"><label className="fl">UPC Code</label><input className="fi" value={upc} onChange={e => setUpc(e.target.value)} placeholder="Scan or enter UPC" /></div>
+        <div className="fg"><label className="fl">Item Name</label><input className="fi" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Green Beans (canned)" /></div>
+        <div className="fg"><label className="fl">Category</label><select className="fi" value={cat} onChange={e => setCat(e.target.value)}>{categories.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
+        <div style={{ display: "flex", gap: 12 }}>
+          <div className="fg" style={{ flex: 1 }}><label className="fl">Quantity</label><input className="fi" type="number" min="1" value={qty} onChange={e => setQty(e.target.value)} /></div>
+          <div className="fg" style={{ flex: 1 }}><label className="fl">Price ($)</label><input className="fi" type="number" step=".01" value={price} onChange={e => setPrice(e.target.value)} placeholder="0.00" /></div>
+        </div>
+        <div className="fg"><label className="fl">Expiration Date</label><input className="fi" type="date" value={expiry} onChange={e => setExpiry(e.target.value)} /></div>
+        <div className="fg"><label className="fl">Location</label><input className="fi" value={loc} onChange={e => setLoc(e.target.value)} placeholder="e.g. Shelf A2" /></div>
+        <button className="bt bt-p" style={{ width: "100%" }} onClick={handleAdd}><I.Plus /> Add to Inventory</button>
+        {msg && <div style={{ marginTop: 10, padding: 10, background: "var(--gn-s)", borderRadius: 8, color: "var(--gn)", fontWeight: 600, textAlign: "center", fontSize: 13 }}>{msg}</div>}
       </div>
     </div>
   );
 }
 
-// ── RECIPIENTS PAGE ──
-function RecipientsPage({recipients}) {
+function BagAndGo({ inv, recip }) {
+  const [fSize, setFSize] = useState(3);
+  const [diet, setDiet] = useState("");
+  const [selR, setSelR] = useState("");
+  const [bag, setBag] = useState(null);
+  const [packed, setPacked] = useState(false);
+
+  const gen = () => {
+    if (selR) { const r = recip.find(rc => rc.id === selR); if (r) { setFSize(r.size); setDiet(r.dietary || ""); } }
+    setBag(buildBag(inv, fSize, diet));
+    setPacked(false);
+  };
+
+  const tBI = bag ? bag.bag.reduce((s, i) => s + i.bagQty, 0) : 0;
+  const tBV = bag ? bag.bag.reduce((s, i) => s + i.bagQty * i.price, 0) : 0;
+
   return (
-    <div className="fade-up">
-      <div className="stats-grid">
-        <div className="stat-card good"><div className="label">Families Served</div><div className="value">{recipients.length}</div></div>
-        <div className="stat-card"><div className="label">People Served</div><div className="value">{recipients.reduce((s,r)=>s+r.size,0)}</div></div>
-        <div className="stat-card"><div className="label">Total Visits</div><div className="value">{recipients.reduce((s,r)=>s+r.visits,0)}</div></div>
+    <div className="fu">
+      <div className="bh">
+        <h2>Bag & Go</h2>
+        <p>Smart packing based on family size, dietary needs & FIFO rotation</p>
+        <div className="bc">
+          <div className="fg" style={{ minWidth: 170 }}><label className="fl" style={{ color: "#fff" }}>Recipient (optional)</label><select className="fi" value={selR} onChange={e => setSelR(e.target.value)}><option value="">— Custom —</option>{recip.map(r => <option key={r.id} value={r.id}>{r.name} ({r.size})</option>)}</select></div>
+          <div className="fg" style={{ minWidth: 90 }}><label className="fl" style={{ color: "#fff" }}>Family Size</label><input className="fi" type="number" min="1" max="15" value={fSize} onChange={e => setFSize(Number(e.target.value))} /></div>
+          <div className="fg" style={{ minWidth: 180 }}><label className="fl" style={{ color: "#fff" }}>Dietary Notes</label><input className="fi" value={diet} onChange={e => setDiet(e.target.value)} placeholder="Vegetarian, Nut allergy..." /></div>
+          <button className="bt" style={{ background: "#fff", color: "var(--acc)", fontWeight: 700, height: 40 }} onClick={gen}>Generate Bag</button>
+        </div>
       </div>
-      <div className="table-wrap">
-        <table><thead><tr><th>Recipient</th><th>Family Size</th><th>Dietary Notes</th><th>Total Visits</th><th>Last Visit</th></tr></thead>
-          <tbody>{recipients.map(r=>(<tr key={r.id}><td style={{fontWeight:600}}>{r.name}</td><td>{r.size}</td><td>{r.dietaryNotes||<span style={{color:"var(--text3)"}}>None</span>}</td><td>{r.visits}</td><td>{fmt(r.lastVisit)}</td></tr>))}</tbody>
-        </table>
-      </div>
+      {bag && (
+        <div className="fu">
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
+            <div className="cd" style={{ flex: 1, borderLeft: "4px solid var(--acc)", minWidth: 140, textAlign: "center" }}><div className="lb">Items</div><div className="vl">{tBI}</div></div>
+            <div className="cd" style={{ flex: 1, borderLeft: "4px solid var(--gn)", minWidth: 140, textAlign: "center" }}><div className="lb">Value</div><div className="vl">{fmtCurrency(tBV)}</div></div>
+            <div className="cd" style={{ flex: 1, borderLeft: "4px solid var(--yl)", minWidth: 140, textAlign: "center" }}><div className="lb">FIFO Priority</div><div className="vl">{bag.bag.filter(i => i.fifo).length}</div></div>
+          </div>
+          {bag.unmet.length > 0 && <div style={{ padding: 12, background: "var(--yl-s)", borderRadius: 8, border: "1px solid #F5E6A3", marginBottom: 16, fontSize: 13 }}><strong>Shortages: </strong>{bag.unmet.map(u => `${u.category} (need ${u.needed} more)`).join(", ")}</div>}
+          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>Suggested Contents</h3>
+          {bag.bag.map((item, i) => (
+            <div key={i} className="bi si" style={{ animationDelay: `${i * 40}ms`, ...(packed ? { borderColor: "var(--gn)", background: "var(--gn-s)" } : {}) }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</div>
+                <div style={{ fontSize: 11, color: "var(--tx3)" }}>{item.category} · Qty: {item.bagQty} · {fmtCurrency(item.price * item.bagQty)}</div>
+              </div>
+              {item.fifo && <span className="badge badge-yl">FIFO</span>}
+              {item.optional && <span className="badge badge-gn">Optional</span>}
+            </div>
+          ))}
+          <button className="bt bt-p" style={{ marginTop: 16 }} onClick={() => setPacked(!packed)}>{packed ? "✓ Packed" : "Mark as Packed"}</button>
+        </div>
+      )}
     </div>
   );
 }
 
-// ── DISCUSSION PAGE ──
-function DiscussionPage({messages, addMessage, addReply}) {
-  const [newMsg, setNewMsg] = useState("");
-  const [replyTo, setReplyTo] = useState(null);
-  const [replyText, setReplyText] = useState("");
-  const submit = () => { if(newMsg.trim()){addMessage(newMsg.trim());setNewMsg("");} };
-  const submitReply = (id) => { if(replyText.trim()){addReply(id,replyText.trim());setReplyText("");setReplyTo(null);} };
+function Donors({ donors, setModal }) {
+  return (
+    <div className="fu">
+      <div className="tp"><h2>Donors</h2><button className="bt bt-p bt-sm" onClick={() => setModal("donor")}><I.Plus /> Add Donor</button></div>
+      {donors.length === 0 ? <div className="empty"><I.Heart /><p>No donors yet</p></div> :
+        donors.map(d => (<div key={d.id} className="dn-cd"><h4>{d.name}</h4><div className="dn-sm">{d.donations} donations</div><div className="dn-amt">{fmtCurrency(d.total)}</div></div>))
+      }
+    </div>
+  );
+}
+
+function Recipients({ recip, setModal }) {
+  return (
+    <div className="fu">
+      <div className="tp"><h2>Recipients</h2><button className="bt bt-p bt-sm" onClick={() => setModal("recip")}><I.Plus /> Add Recipient</button></div>
+      {recip.length === 0 ? <div className="empty"><I.Users /><p>No recipients yet</p></div> :
+        recip.map(r => (<div key={r.id} className="dn-cd"><h4>{r.name}</h4><div className="dn-sm">Family of {r.size}{r.dietary ? ` · ${r.dietary}` : ""}</div></div>))
+      }
+    </div>
+  );
+}
+
+function Discussion({ messages, setModal }) {
+  return (
+    <div className="fu">
+      <div className="tp"><h2>Discussion Board</h2><button className="bt bt-p bt-sm" onClick={() => setModal("msg")}><I.Plus /> New Post</button></div>
+      {messages.length === 0 ? <div className="empty"><I.Chat /><p>No discussions yet</p></div> :
+        messages.map(m => (
+          <div key={m.id} className="msg">
+            <div className="msg-hd"><span className="msg-au">{m.author}</span><span className="msg-dt">{fmt(m.date)}</span></div>
+            <div className="msg-bd">{m.body}</div>
+            {m.replies && m.replies.length > 0 && m.replies.map((r, ri) => (
+              <div key={ri} className="msg-rp"><span className="msg-au" style={{ fontSize: 12 }}>{r.author}</span> <span className="msg-dt">{fmt(r.date)}</span><div className="msg-bd" style={{ marginTop: 4 }}>{r.body}</div></div>
+            ))}
+          </div>
+        ))
+      }
+    </div>
+  );
+}
+
+function Alerts({ inv }) {
+  const alerts = [];
+  inv.forEach(i => {
+    const d = daysUntil(i.expiry);
+    if (d > 0 && d <= 30) alerts.push({ title: `Expiring soon: ${i.name}`, detail: `${i.qty} units expire ${fmt(i.expiry)}.`, type: "exp" });
+    if (i.qty <= 5 && i.qty > 0) alerts.push({ title: `Low stock: ${i.name}`, detail: `Only ${i.qty} units remaining.`, type: "low" });
+  });
+  if (alerts.length === 0) alerts.push({ title: "All clear!", detail: "No urgent alerts right now.", type: "ok" });
+  return (
+    <div className="fu">
+      <div className="tp"><h2>Alerts</h2></div>
+      {alerts.map((a, i) => (<div key={i} className="al-it" style={a.type === "ok" ? { background: "var(--gn-s)" } : {}}><div className="al-dot" style={a.type === "ok" ? { background: "var(--gn)" } : a.type === "low" ? { background: "var(--rd)" } : {}} /><div><div className="al-tx">{a.title}</div><div className="al-sm">{a.detail}</div></div></div>))}
+    </div>
+  );
+}
+
+function Analytics({ inv }) {
+  const cats = [...new Set(inv.map(i => i.category))].sort();
+  const totalVal = inv.reduce((s, i) => s + i.qty * i.price, 0);
+  return (
+    <div className="fu">
+      <div className="tp"><h2>Analytics</h2></div>
+      <div className="sg">
+        <div className="cd"><div className="lb">Total Value</div><div className="vl">{fmtCurrency(totalVal)}</div></div>
+        <div className="cd"><div className="lb">Categories</div><div className="vl">{cats.length}</div></div>
+        <div className="cd"><div className="lb">Avg Price</div><div className="vl">{fmtCurrency(inv.length ? totalVal / inv.reduce((s,i)=>s+i.qty,0) : 0)}</div></div>
+      </div>
+      <h3 style={{ fontSize: 15, fontWeight: 700, margin: "20px 0 12px" }}>By Category</h3>
+      {cats.map(c => { const items = inv.filter(i => i.category === c); const val = items.reduce((s, i) => s + i.qty * i.price, 0); const qty = items.reduce((s, i) => s + i.qty, 0); return (
+        <div key={c} className="bi"><div style={{ flex: 1 }}><div style={{ fontWeight: 600 }}>{c}</div><div style={{ fontSize: 11, color: "var(--tx3)" }}>{items.length} items · {qty} units</div></div><div style={{ fontWeight: 700 }}>{fmtCurrency(val)}</div></div>
+      ); })}
+    </div>
+  );
+}
+
+function CategoryManager({ categories, onAdd, onRename, onDelete, inv }) {
+  const [newCat, setNewCat] = useState("");
+  const [editing, setEditing] = useState(null);
+  const [editVal, setEditVal] = useState("");
+
+  const catCounts = useMemo(() => {
+    const counts = {};
+    categories.forEach(c => { counts[c] = inv.filter(i => i.category === c).length; });
+    return counts;
+  }, [categories, inv]);
+
+  const handleAdd = () => {
+    const trimmed = newCat.trim();
+    if (!trimmed) return;
+    if (categories.includes(trimmed)) { alert("Category already exists"); return; }
+    onAdd(trimmed);
+    setNewCat("");
+  };
+
+  const handleRename = (oldName) => {
+    const trimmed = editVal.trim();
+    if (!trimmed || trimmed === oldName) { setEditing(null); return; }
+    if (categories.includes(trimmed)) { alert("Category already exists"); setEditing(null); return; }
+    onRename(oldName, trimmed);
+    setEditing(null);
+  };
+
+  const handleDelete = (catName) => {
+    if (catCounts[catName] > 0) { alert(`Cannot delete "${catName}" — ${catCounts[catName]} items still use this category. Reassign them first.`); return; }
+    if (window.confirm(`Delete category "${catName}"?`)) onDelete(catName);
+  };
 
   return (
-    <div className="fade-up" style={{maxWidth:700}}>
-      <div className="card" style={{marginBottom:24}}>
-        <textarea className="form-input" placeholder="Share an update, need, or note with the team..." value={newMsg} onChange={e=>setNewMsg(e.target.value)} style={{marginBottom:12}}/>
-        <button className="btn btn-primary" onClick={submit}><Icons.Chat/> Post Message</button>
+    <div style={{ marginTop: 24 }}>
+      <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Manage Categories</h3>
+      <p style={{ fontSize: 12, color: "var(--tx2)", marginBottom: 14 }}>Add, rename, or remove categories. Categories with items cannot be deleted.</p>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <input className="fi" value={newCat} onChange={e => setNewCat(e.target.value)} placeholder="New category name..." onKeyDown={e => e.key === "Enter" && handleAdd()} style={{ maxWidth: 280 }} />
+        <button className="bt bt-p bt-sm" onClick={handleAdd}><I.Plus /> Add</button>
       </div>
-      {messages.map(msg => (
-        <div key={msg.id} className="message-card slide-in">
-          <div className="message-header">
-            <div className="avatar">{msg.author.split(" ").map(n=>n[0]).join("")}</div>
-            <div><div className="message-author">{msg.author}</div><div className="message-role">{msg.role}</div></div>
-            <div className="message-time">{fmt(msg.time)}</div>
-          </div>
-          <div className="message-text">{msg.text}</div>
-          {msg.replies.length>0 && (<div className="replies">{msg.replies.map(r=>(<div key={r.id} className="reply"><div className="avatar">{r.author.split(" ").map(n=>n[0]).join("")}</div><div className="reply-content"><div className="reply-author">{r.author}</div><div className="reply-text">{r.text}</div><div className="reply-time">{fmt(r.time)}</div></div></div>))}</div>)}
-          <div style={{marginTop:12}}>
-            {replyTo===msg.id ? (<div style={{display:"flex",gap:8}}><input className="form-input" placeholder="Write a reply..." value={replyText} onChange={e=>setReplyText(e.target.value)} style={{fontSize:13}} onKeyDown={e=>{if(e.key==="Enter")submitReply(msg.id)}}/><button className="btn btn-primary btn-sm" onClick={()=>submitReply(msg.id)}>Reply</button><button className="btn btn-ghost btn-sm" onClick={()=>{setReplyTo(null);setReplyText("")}}>Cancel</button></div>)
-            : (<button className="btn btn-ghost btn-sm" onClick={()=>setReplyTo(msg.id)}>Reply</button>)}
-          </div>
+      {categories.map(c => (
+        <div key={c} className="cat-ed">
+          {editing === c ? (
+            <>
+              <input className="fi" value={editVal} onChange={e => setEditVal(e.target.value)} onKeyDown={e => e.key === "Enter" && handleRename(c)} style={{ flex: 1, padding: "5px 10px" }} autoFocus />
+              <button className="cat-eb" onClick={() => handleRename(c)} title="Save"><I.Check /></button>
+              <button onClick={() => setEditing(null)} title="Cancel"><I.X /></button>
+            </>
+          ) : (
+            <>
+              <div className="cat-nm">{c}</div>
+              <div className="cat-ct">{catCounts[c] || 0} items</div>
+              <button className="cat-eb" onClick={() => { setEditing(c); setEditVal(c); }} title="Rename"><I.Edit /></button>
+              <button onClick={() => handleDelete(c)} title="Delete"><I.Trash /></button>
+            </>
+          )}
         </div>
       ))}
     </div>
   );
 }
 
-// ── NOTIFICATIONS PAGE ──
-function NotificationsPage({notifications}) {
+function Settings({ categories, onAddCat, onRenameCat, onDeleteCat, inv }) {
   return (
-    <div className="fade-up" style={{maxWidth:700}}>
-      {notifications.length===0 && <div className="card" style={{textAlign:"center",padding:40,color:"var(--text3)"}}><p>No alerts — everything looks great!</p></div>}
-      {notifications.map((n,i) => (<div key={i} className={`notif-item ${n.type}`}><div className="notif-icon"><Icons.AlertTriangle/></div><div className="notif-text"><div className="notif-title">{n.title}</div><div className="notif-desc">{n.desc}</div></div></div>))}
+    <div className="fu">
+      <div className="tp"><h2>Settings</h2></div>
+      <div className="cd">
+        <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Organization</h3>
+        <p style={{ fontSize: 13, color: "var(--tx2)" }}>Church Pantry Management System</p>
+      </div>
+      <div className="cd" style={{ marginTop: 16 }}>
+        <CategoryManager categories={categories} onAdd={onAddCat} onRename={onRenameCat} onDelete={onDeleteCat} inv={inv} />
+      </div>
     </div>
   );
 }
 
-// ── ANALYTICS PAGE ──
-function AnalyticsPage({inventory, donors, recipients}) {
-  const byCat = {};
-  inventory.forEach(i => { byCat[i.category] = (byCat[i.category]||0) + i.qty; });
-  const catEntries = Object.entries(byCat).sort((a,b) => b[1]-a[1]);
-  const maxQty = catEntries[0]?.[1] || 1;
+// ── Modal ──
+function Modal({ type, onClose, onSave, categories }) {
+  const [form, setForm] = useState({});
+  const up = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  if (!type) return null;
   return (
-    <div className="fade-up">
-      <div className="stats-grid">
-        <div className="stat-card good"><div className="label">Products</div><div className="value">{inventory.length}</div></div>
-        <div className="stat-card"><div className="label">Donors</div><div className="value">{donors.length}</div></div>
-        <div className="stat-card"><div className="label">Families</div><div className="value">{recipients.length}</div></div>
-        <div className="stat-card"><div className="label">Categories</div><div className="value">{Object.keys(byCat).length}</div></div>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
-        <div className="card">
-          <h3 className="card-title" style={{marginBottom:14}}>Inventory by Category</h3>
-          {catEntries.map(([cat,qty]) => (<div key={cat} style={{marginBottom:10}}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,fontWeight:600,marginBottom:3}}><span>{cat}</span><span>{qty}</span></div><div style={{height:8,background:"var(--bg2)",borderRadius:4,overflow:"hidden"}}><div style={{width:`${(qty/maxQty)*100}%`,height:"100%",background:"var(--accent)",borderRadius:4,transition:"width .5s ease"}}/></div></div>))}
-        </div>
-        <div className="card">
-          <h3 className="card-title" style={{marginBottom:14}}>Expiration Timeline</h3>
-          {[{l:"Expired",c:inventory.filter(i=>daysUntil(i.expiry)<=0).length,cl:"var(--red)"},
-            {l:"Within 7 Days",c:inventory.filter(i=>{const d=daysUntil(i.expiry);return d>0&&d<=7;}).length,cl:"var(--red)"},
-            {l:"Within 30 Days",c:inventory.filter(i=>{const d=daysUntil(i.expiry);return d>7&&d<=30;}).length,cl:"var(--yellow)"},
-            {l:"30+ Days",c:inventory.filter(i=>daysUntil(i.expiry)>30).length,cl:"var(--green)"}
-          ].map(row => (<div key={row.l} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid var(--border)"}}><div style={{width:10,height:10,borderRadius:3,background:row.cl,flexShrink:0}}/><span style={{flex:1,fontSize:13,fontWeight:500}}>{row.l}</span><span style={{fontWeight:700,fontSize:16}}>{row.c}</span></div>))}
-          <div style={{marginTop:16}}><h4 style={{fontSize:13,fontWeight:600,color:"var(--text3)",marginBottom:8}}>Donor Breakdown</h4>
-            {["Individual","Family","Organization","Corporate"].map(type => (<div key={type} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",fontSize:13}}><span>{type}</span><span style={{fontWeight:600}}>{donors.filter(d=>d.type===type).length}</span></div>))}
+    <div className="modal-ov" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        {type === "add" && (<>
+          <h3>Add Inventory Item</h3>
+          <div className="fg"><label className="fl">UPC</label><input className="fi" onChange={e => up("upc", e.target.value)} /></div>
+          <div className="fg"><label className="fl">Name *</label><input className="fi" onChange={e => up("name", e.target.value)} /></div>
+          <div className="fg"><label className="fl">Category</label><select className="fi" onChange={e => up("category", e.target.value)} defaultValue={categories[0]}>{categories.map(c => <option key={c}>{c}</option>)}</select></div>
+          <div style={{ display: "flex", gap: 12 }}>
+            <div className="fg" style={{ flex: 1 }}><label className="fl">Qty</label><input className="fi" type="number" defaultValue={1} onChange={e => up("qty", Number(e.target.value))} /></div>
+            <div className="fg" style={{ flex: 1 }}><label className="fl">Price</label><input className="fi" type="number" step=".01" onChange={e => up("price", Number(e.target.value))} /></div>
           </div>
-        </div>
+          <div className="fg"><label className="fl">Expiry</label><input className="fi" type="date" onChange={e => up("expiry", e.target.value)} /></div>
+          <div className="fg"><label className="fl">Location</label><input className="fi" onChange={e => up("location", e.target.value)} /></div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}><button className="bt bt-s" onClick={onClose}>Cancel</button><button className="bt bt-p" onClick={() => onSave({ ...form, category: form.category || categories[0], qty: form.qty || 1, price: form.price || 0, expiry: form.expiry || "2027-01-01", added_by: "Manager", added_date: new Date().toISOString().slice(0, 10) })}>Add Item</button></div>
+        </>)}
+        {type === "donor" && (<>
+          <h3>Add Donor</h3>
+          <div className="fg"><label className="fl">Name *</label><input className="fi" onChange={e => up("name", e.target.value)} /></div>
+          <div className="fg"><label className="fl">Contact</label><input className="fi" onChange={e => up("contact", e.target.value)} /></div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}><button className="bt bt-s" onClick={onClose}>Cancel</button><button className="bt bt-p" onClick={() => onSave(form)}>Add Donor</button></div>
+        </>)}
+        {type === "recip" && (<>
+          <h3>Add Recipient</h3>
+          <div className="fg"><label className="fl">Name *</label><input className="fi" onChange={e => up("name", e.target.value)} /></div>
+          <div className="fg"><label className="fl">Family Size</label><input className="fi" type="number" defaultValue={1} onChange={e => up("size", Number(e.target.value))} /></div>
+          <div className="fg"><label className="fl">Dietary Restrictions</label><input className="fi" onChange={e => up("dietary", e.target.value)} /></div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}><button className="bt bt-s" onClick={onClose}>Cancel</button><button className="bt bt-p" onClick={() => onSave(form)}>Add Recipient</button></div>
+        </>)}
+        {type === "msg" && (<>
+          <h3>New Discussion Post</h3>
+          <div className="fg"><label className="fl">Your Name</label><input className="fi" onChange={e => up("author", e.target.value)} /></div>
+          <div className="fg"><label className="fl">Message</label><textarea className="fi" rows={4} onChange={e => up("body", e.target.value)} /></div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}><button className="bt bt-s" onClick={onClose}>Cancel</button><button className="bt bt-p" onClick={() => onSave(form)}>Post</button></div>
+        </>)}
       </div>
     </div>
   );
 }
 
-// ── SETTINGS PAGE ──
-function SettingsPage({emailFreq, setEmailFreq, syncStatus, triggerSync}) {
-  return (
-    <div className="fade-up" style={{maxWidth:600}}>
-      <div className="card" style={{marginBottom:20}}>
-        <h3 className="card-title" style={{marginBottom:4}}>Cloud Sync</h3>
-        <p style={{fontSize:13,color:"var(--text3)",marginBottom:16}}>Data syncs automatically between web and mobile apps</p>
-        <div style={{display:"flex",gap:12,alignItems:"center"}}>
-          <div className={`cloud-sync ${syncStatus==="synced"?"active":""}`}><SyncIcon spinning={syncStatus==="syncing"}/>{syncStatus==="synced"?"All data synced":syncStatus==="syncing"?"Syncing...":"Offline — changes saved locally"}</div>
-          <button className="btn btn-secondary btn-sm" onClick={triggerSync}>Force Sync</button>
-        </div>
-      </div>
-      <div className="card" style={{marginBottom:20}}>
-        <h3 className="card-title" style={{marginBottom:4}}>Email Reports</h3>
-        <p style={{fontSize:13,color:"var(--text3)",marginBottom:16}}>Receive pantry summary reports by email</p>
-        <div className="email-config">
-          {[{key:"biweekly",label:"Bi-Weekly",desc:"Every 2 weeks on Monday"},{key:"monthly",label:"Monthly",desc:"1st of each month"}].map(opt => (
-            <div key={opt.key} className={`email-freq-option ${emailFreq===opt.key?"selected":""}`} onClick={()=>setEmailFreq(opt.key)}><div className="freq-label">{opt.label}</div><div className="freq-desc">{opt.desc}</div></div>
-          ))}
-        </div>
-      </div>
-      <div className="card" style={{marginBottom:20}}>
-        <h3 className="card-title" style={{marginBottom:4}}>Shared Access</h3>
-        <p style={{fontSize:13,color:"var(--text3)",marginBottom:16}}>Invite team members to manage the pantry</p>
-        <div className="form-group"><label className="form-label">Email Address</label><input className="form-input" placeholder="volunteer@email.com"/></div>
-        <div className="form-group"><label className="form-label">Role</label><select className="form-input"><option>Manager</option><option>Volunteer</option><option>Viewer</option></select></div>
-        <button className="btn btn-primary" style={{width:"100%",justifyContent:"center"}}><Icons.Share/> Send Invitation</button>
-      </div>
-      <div className="card">
-        <h3 className="card-title" style={{marginBottom:4}}>Notifications</h3>
-        <p style={{fontSize:13,color:"var(--text3)",marginBottom:16}}>Choose which alerts you receive</p>
-        {[{label:"Items expiring within 7 days",def:true},{label:"Low stock alerts (5 or fewer)",def:true},{label:"New donations received",def:true},{label:"Discussion board replies",def:false}].map((opt,i)=>(
-          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid var(--border)"}}><input type="checkbox" defaultChecked={opt.def}/><span style={{fontSize:13}}>{opt.label}</span></div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// ── Main App ──
+export default function ChurchPantry() {
+  const [pg, setPg] = useState("dash");
+  const [inv, setInv] = useState([]);
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
+  const [donors, setDonors] = useState([]);
+  const [recip, setRecip] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [srch, setSrch] = useState("");
+  const [sel, setSel] = useState([]);
+  const [modal, setModal] = useState(null);
+  const [sbOpen, setSbOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-// ═══════════════════════════════════════════
-//  MODALS
-// ═══════════════════════════════════════════
+  // ── Load data from Supabase ──
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const { data: invData } = await supabase.from("inventory").select("*");
+        if (invData) setInv(invData);
 
-function AddItemModal({onClose, onAdd}) {
-  const [form, setForm] = useState({upc:"",name:"",category:"Canned Goods",qty:1,price:"",expiry:"",location:""});
-  const submit = () => { if(!form.name)return; onAdd({...form,qty:Number(form.qty),price:Number(form.price),addedBy:"You",addedDate:new Date().toISOString().slice(0,10)}); onClose(); };
-  return (
-    <div className="modal-overlay" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()}>
-      <div className="modal-header"><h3>Add Item</h3><button className="modal-close" onClick={onClose}>×</button></div>
-      <div className="modal-body">
-        <div className="form-group"><label className="form-label">UPC Code</label><input className="form-input" value={form.upc} onChange={e=>setForm(f=>({...f,upc:e.target.value}))}/></div>
-        <div className="form-group"><label className="form-label">Item Name *</label><input className="form-input" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/></div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <div className="form-group"><label className="form-label">Category</label><select className="form-input" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>{CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">Quantity</label><input className="form-input" type="number" min="1" value={form.qty} onChange={e=>setForm(f=>({...f,qty:e.target.value}))}/></div>
-          <div className="form-group"><label className="form-label">Price ($)</label><input className="form-input" type="number" step="0.01" value={form.price} onChange={e=>setForm(f=>({...f,price:e.target.value}))}/></div>
-          <div className="form-group"><label className="form-label">Expiry Date</label><input className="form-input" type="date" value={form.expiry} onChange={e=>setForm(f=>({...f,expiry:e.target.value}))}/></div>
-        </div>
-        <div className="form-group"><label className="form-label">Location</label><input className="form-input" value={form.location} onChange={e=>setForm(f=>({...f,location:e.target.value}))} placeholder="e.g. Shelf A2"/></div>
-        <button className="btn btn-primary" style={{width:"100%",justifyContent:"center"}} onClick={submit}><Icons.Plus/> Add Item</button>
-      </div>
-    </div></div>
-  );
-}
+        const { data: catData } = await supabase.from("categories").select("*");
+        if (catData && catData.length > 0) setCategories(catData.map(c => c.name).sort());
 
-function BulkAddModal({onClose, onBulkAdd}) {
-  const [raw, setRaw] = useState("Green Beans, Canned Goods, 24, 1.29, 2026-12-01, Shelf A2\nChicken Soup, Canned Goods, 18, 2.49, 2026-11-15, Shelf A1\nSpaghetti, Grains & Pasta, 30, 1.49, 2027-06-01, Shelf C2");
-  const [preview, setPreview] = useState([]);
-  const parse = () => {
-    const items = raw.trim().split("\n").filter(l=>l.trim()).map(line => {
-      const parts = line.split(",").map(s=>s.trim());
-      return {upc:"000000"+String(Math.floor(Math.random()*999999)).padStart(6,"0"),name:parts[0]||"Unknown",category:parts[1]||"Canned Goods",qty:Number(parts[2])||1,price:Number(parts[3])||0,expiry:parts[4]||"2027-01-01",location:parts[5]||"",addedBy:"You (Bulk)",addedDate:new Date().toISOString().slice(0,10)};
+        const { data: donorData } = await supabase.from("donors").select("*");
+        if (donorData) setDonors(donorData);
+
+        const { data: recipData } = await supabase.from("recipients").select("*");
+        if (recipData) setRecip(recipData);
+
+        const { data: msgData } = await supabase.from("messages").select("*");
+        if (msgData) setMessages(msgData);
+      } catch (err) { console.error("Load error:", err); }
+      setLoading(false);
+    }
+    load();
+  }, []);
+
+  // ── Filtered inventory for search ──
+  const filteredInv = useMemo(() => {
+    if (!srch) return inv;
+    const s = srch.toLowerCase();
+    return inv.filter(i => i.name.toLowerCase().includes(s) || (i.upc && i.upc.includes(s)) || i.category.toLowerCase().includes(s));
+  }, [inv, srch]);
+
+  // ── Alerts ──
+  const alerts = useMemo(() => {
+    const a = [];
+    inv.forEach(i => {
+      const d = daysUntil(i.expiry);
+      if (d > 0 && d <= 30) a.push({ title: `Expiring soon: ${i.name}`, detail: `${i.qty} units expire ${fmt(i.expiry)}.` });
+      if (i.qty <= 5 && i.qty > 0) a.push({ title: `Low stock: ${i.name}`, detail: `Only ${i.qty} units remaining.` });
     });
-    setPreview(items);
+    return a;
+  }, [inv]);
+
+  // ── CRUD functions ──
+  const addItem = useCallback(async (item) => {
+    const { data, error } = await supabase.from("inventory").insert([item]).select();
+    if (data) setInv(p => [...p, ...data]);
+    if (error) console.error("Add error:", error);
+    setModal(null);
+  }, []);
+
+  const delItem = useCallback(async (id) => {
+    await supabase.from("inventory").delete().eq("id", id);
+    setInv(p => p.filter(i => i.id !== id));
+    setSel(p => p.filter(s => s !== id));
+  }, []);
+
+  const addDonor = useCallback(async (d) => {
+    const donor = { name: d.name, contact: d.contact || "", donations: 0, total: 0 };
+    const { data } = await supabase.from("donors").insert([donor]).select();
+    if (data) setDonors(p => [...p, ...data]);
+    setModal(null);
+  }, []);
+
+  const addRecip = useCallback(async (r) => {
+    const rec = { name: r.name, size: r.size || 1, dietary: r.dietary || "" };
+    const { data } = await supabase.from("recipients").insert([rec]).select();
+    if (data) setRecip(p => [...p, ...data]);
+    setModal(null);
+  }, []);
+
+  const addMsg = useCallback(async (m) => {
+    const msg = { author: m.author || "Anonymous", body: m.body, date: new Date().toISOString().slice(0, 10), replies: [] };
+    const { data } = await supabase.from("messages").insert([msg]).select();
+    if (data) setMessages(p => [...p, ...data]);
+    setModal(null);
+  }, []);
+
+  // ── Category CRUD ──
+  const addCategory = useCallback(async (name) => {
+    const { data } = await supabase.from("categories").insert([{ name }]).select();
+    if (data) setCategories(p => [...p, name].sort());
+  }, []);
+
+  const renameCategory = useCallback(async (oldName, newName) => {
+    await supabase.from("categories").update({ name: newName }).eq("name", oldName);
+    await supabase.from("inventory").update({ category: newName }).eq("category", oldName);
+    setCategories(p => p.map(c => c === oldName ? newName : c).sort());
+    setInv(p => p.map(i => i.category === oldName ? { ...i, category: newName } : i));
+  }, []);
+
+  const deleteCategory = useCallback(async (name) => {
+    await supabase.from("categories").delete().eq("name", name);
+    setCategories(p => p.filter(c => c !== name));
+  }, []);
+
+  const togSel = useCallback((id) => setSel(p => p.includes(id) ? p.filter(s => s !== id) : [...p, id]), []);
+  const selAll = useCallback((ids) => setSel(p => { const allIn = ids.every(id => p.includes(id)); return allIn ? p.filter(id => !ids.includes(id)) : [...new Set([...p, ...ids])]; }), []);
+
+  const handleSave = (data) => {
+    if (modal === "add") addItem(data);
+    else if (modal === "donor") addDonor(data);
+    else if (modal === "recip") addRecip(data);
+    else if (modal === "msg") addMsg(data);
   };
-  const submit = () => { if(preview.length){onBulkAdd(preview);onClose();} };
-  return (
-    <div className="modal-overlay" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:640}}>
-      <div className="modal-header"><h3>Bulk Add Items</h3><button className="modal-close" onClick={onClose}>×</button></div>
-      <div className="modal-body">
-        <p style={{fontSize:13,color:"var(--text2)",marginBottom:12}}>Enter one item per line: <strong>Name, Category, Qty, Price, Expiry, Location</strong></p>
-        <textarea className="bulk-textarea" value={raw} onChange={e=>setRaw(e.target.value)}/>
-        <div style={{display:"flex",gap:10,marginTop:12}}>
-          <button className="btn btn-secondary" onClick={parse}>Preview ({raw.trim().split("\n").filter(l=>l.trim()).length} lines)</button>
-          {preview.length>0 && <button className="btn btn-primary" onClick={submit}><Icons.Plus/> Add {preview.length} Items</button>}
-        </div>
-        {preview.length>0 && (<div style={{marginTop:16,maxHeight:200,overflow:"auto"}}><table style={{fontSize:12}}><thead><tr><th>Name</th><th>Category</th><th>Qty</th><th>Price</th><th>Expiry</th></tr></thead><tbody>{preview.map((p,i)=>(<tr key={i}><td>{p.name}</td><td>{p.category}</td><td>{p.qty}</td><td>{fmtCurrency(p.price)}</td><td>{p.expiry}</td></tr>))}</tbody></table></div>)}
-      </div>
-    </div></div>
-  );
-}
 
-function BulkEditModal({onClose, selected, inventory, setInventory, setSelected, triggerSync}) {
-  const [category, setCategory] = useState("");
-  const [location, setLocation] = useState("");
-  const apply = () => {
-    setInventory(prev => prev.map(i => {
-      if(!selected.has(i.id)) return i;
-      const updated = {...i};
-      if(category) updated.category = category;
-      if(location) updated.location = location;
-      return updated;
-    }));
-    setSelected(new Set()); triggerSync(); onClose();
-  };
-  return (
-    <div className="modal-overlay" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()}>
-      <div className="modal-header"><h3>Bulk Edit ({selected.size} items)</h3><button className="modal-close" onClick={onClose}>×</button></div>
-      <div className="modal-body">
-        <p style={{fontSize:13,color:"var(--text2)",marginBottom:16}}>Leave a field empty to keep existing values.</p>
-        <div className="form-group"><label className="form-label">Change Category</label><select className="form-input" value={category} onChange={e=>setCategory(e.target.value)}><option value="">— Keep Existing —</option>{CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
-        <div className="form-group"><label className="form-label">Change Location</label><input className="form-input" value={location} onChange={e=>setLocation(e.target.value)} placeholder="e.g. Shelf B2"/></div>
-        <button className="btn btn-primary" style={{width:"100%",justifyContent:"center"}} onClick={apply}><Icons.Edit/> Apply Changes</button>
-      </div>
-    </div></div>
-  );
-}
+  const setPage = (p) => { setPg(p); setSbOpen(false); };
 
-function AddDonorModal({onClose, onAdd}) {
-  const [form, setForm] = useState({name:"",type:"Individual",email:"",totalDonations:0,lastDonation:new Date().toISOString().slice(0,10),totalValue:0});
-  const submit = () => { if(!form.name)return; onAdd(form); onClose(); };
-  return (
-    <div className="modal-overlay" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()}>
-      <div className="modal-header"><h3>Add Donor</h3><button className="modal-close" onClick={onClose}>×</button></div>
-      <div className="modal-body">
-        <div className="form-group"><label className="form-label">Donor Name *</label><input className="form-input" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/></div>
-        <div className="form-group"><label className="form-label">Type</label><select className="form-input" value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}><option>Individual</option><option>Family</option><option>Organization</option><option>Corporate</option></select></div>
-        <div className="form-group"><label className="form-label">Email</label><input className="form-input" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))}/></div>
-        <button className="btn btn-primary" style={{width:"100%",justifyContent:"center"}} onClick={submit}><Icons.Plus/> Add Donor</button>
-      </div>
-    </div></div>
-  );
-}
+  const NAV = [
+    { id: "dash", label: "Dashboard", icon: I.Home, sec: "Main" },
+    { id: "inv", label: "Inventory", icon: I.Pkg, sec: "Main" },
+    { id: "scan", label: "Scan & Add", icon: I.Scan, sec: "Main" },
+    { id: "bag", label: "Bag & Go", icon: I.Bag, sec: "Main" },
+    { id: "donors", label: "Donors", icon: I.Heart, sec: "Community" },
+    { id: "recip", label: "Recipients", icon: I.Users, sec: "Community" },
+    { id: "discussion", label: "Discussion", icon: I.Chat, sec: "Community" },
+    { id: "alerts", label: "Alerts", icon: I.Bell, sec: "Alerts", badge: alerts.length },
+    { id: "analytics", label: "Analytics", icon: I.Chart, sec: "System" },
+    { id: "settings", label: "Settings", icon: I.Gear, sec: "System" },
+  ];
 
-function AddRecipientModal({onClose, onAdd}) {
-  const [form, setForm] = useState({name:"",size:1,dietaryNotes:"",visits:0,lastVisit:new Date().toISOString().slice(0,10)});
-  const submit = () => { if(!form.name)return; onAdd({...form,size:Number(form.size)}); onClose(); };
-  return (
-    <div className="modal-overlay" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()}>
-      <div className="modal-header"><h3>Add Recipient</h3><button className="modal-close" onClick={onClose}>×</button></div>
-      <div className="modal-body">
-        <div className="form-group"><label className="form-label">Name *</label><input className="form-input" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/></div>
-        <div className="form-group"><label className="form-label">Family Size</label><input className="form-input" type="number" min="1" value={form.size} onChange={e=>setForm(f=>({...f,size:e.target.value}))}/></div>
-        <div className="form-group"><label className="form-label">Dietary Notes</label><input className="form-input" value={form.dietaryNotes} onChange={e=>setForm(f=>({...f,dietaryNotes:e.target.value}))} placeholder="e.g. Nut allergy, Vegetarian"/></div>
-        <button className="btn btn-primary" style={{width:"100%",justifyContent:"center"}} onClick={submit}><Icons.Plus/> Add Recipient</button>
+  if (loading) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: "var(--hd)" }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 24, fontWeight: 800, color: "var(--acc)", marginBottom: 8 }}>Church Pantry</div>
+        <div style={{ color: "var(--tx3)" }}>Loading inventory...</div>
       </div>
-    </div></div>
+    </div>
   );
-}
 
-function ShareModal({onClose}) {
+  let curSec = "";
   return (
-    <div className="modal-overlay" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()}>
-      <div className="modal-header"><h3>Share Access</h3><button className="modal-close" onClick={onClose}>×</button></div>
-      <div className="modal-body">
-        <p style={{fontSize:13,color:"var(--text2)",marginBottom:16}}>Invite team members. They'll get a link to join your pantry.</p>
-        <div className="form-group"><label className="form-label">Email Address</label><input className="form-input" placeholder="volunteer@email.com"/></div>
-        <div className="form-group"><label className="form-label">Role</label><select className="form-input"><option>Manager</option><option>Volunteer</option><option>Viewer</option></select></div>
-        <button className="btn btn-primary" style={{width:"100%",justifyContent:"center"}}><Icons.Share/> Send Invitation</button>
-      </div>
-    </div></div>
-  );
-}
+    <>
+      <style>{CSS}</style>
+      <div className="app">
+        <div className={`sb-ov ${sbOpen ? "open" : ""}`} onClick={() => setSbOpen(false)} />
+        <aside className={`sb ${sbOpen ? "open" : ""}`}>
+          <div className="sb-hd"><h1>Church Pantry</h1><p>Inventory Management</p></div>
+          <nav className="sb-nav">
+            {NAV.map(n => {
+              let sec = null;
+              if (n.sec !== curSec) { curSec = n.sec; sec = <div key={`s-${n.sec}`} className="sb-sec">{n.sec}</div>; }
+              return (<div key={n.id}>{sec}<div className={`sb-it ${pg === n.id ? "ac" : ""}`} onClick={() => setPage(n.id)}><n.icon />{n.label}{n.badge > 0 && <span className="badge badge-rd" style={{ marginLeft: "auto", fontSize: 10 }}>{n.badge}</span>}</div></div>);
+            })}
+          </nav>
+          <div className="sb-ft"><I.Cloud /> Cloud synced</div>
+        </aside>
 
-function EmailConfigModal({onClose, freq, setFreq}) {
-  return (
-    <div className="modal-overlay" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()}>
-      <div className="modal-header"><h3>Email Reports</h3><button className="modal-close" onClick={onClose}>×</button></div>
-      <div className="modal-body">
-        <p style={{fontSize:13,color:"var(--text2)",marginBottom:16}}>Choose how often you'd like to receive pantry summary emails.</p>
-        <div className="email-config">
-          {[{key:"biweekly",label:"Bi-Weekly",desc:"Every 2 weeks"},{key:"monthly",label:"Monthly",desc:"1st of each month"}].map(opt=>(
-            <div key={opt.key} className={`email-freq-option ${freq===opt.key?"selected":""}`} onClick={()=>setFreq(opt.key)}><div className="freq-label">{opt.label}</div><div className="freq-desc">{opt.desc}</div></div>
-          ))}
-        </div>
-        <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",marginTop:16}} onClick={onClose}>Save Preferences</button>
+        <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div className="mob-hd">
+            <button style={{ background: "none", border: "none", cursor: "pointer" }} onClick={() => setSbOpen(true)}><I.Menu /></button>
+            <h1>Church Pantry</h1>
+            <div style={{ width: 22 }} />
+          </div>
+
+          <div className="mn">
+            {pg === "dash" && <Dashboard inv={inv} donors={donors} alerts={alerts} setPage={setPage} />}
+            {pg === "inv" && <Inventory inv={filteredInv} categories={categories} srch={srch} setSrch={setSrch} sel={sel} selAll={selAll} togSel={togSel} delItem={delItem} setModal={setModal} />}
+            {pg === "scan" && <ScanAdd onAdd={addItem} categories={categories} />}
+            {pg === "bag" && <BagAndGo inv={inv} recip={recip} />}
+            {pg === "donors" && <Donors donors={donors} setModal={setModal} />}
+            {pg === "recip" && <Recipients recip={recip} setModal={setModal} />}
+            {pg === "discussion" && <Discussion messages={messages} setModal={setModal} />}
+            {pg === "alerts" && <Alerts inv={inv} />}
+            {pg === "analytics" && <Analytics inv={inv} />}
+            {pg === "settings" && <Settings categories={categories} onAddCat={addCategory} onRenameCat={renameCategory} onDeleteCat={deleteCategory} inv={inv} />}
+          </div>
+
+          <div className="mob-nav">
+            {[{ id: "dash", icon: I.Home, label: "Dashboard" }, { id: "inv", icon: I.Pkg, label: "Inventory" }, { id: "bag", icon: I.Bag, label: "Bag & Go" }, { id: "discussion", icon: I.Chat, label: "Discussion" }, { id: "alerts", icon: I.Bell, label: "Alerts" }].map(n => (
+              <button key={n.id} className={pg === n.id ? "ac" : ""} onClick={() => setPage(n.id)}><n.icon />{n.label}</button>
+            ))}
+          </div>
+        </main>
+
+        <Modal type={modal} onClose={() => setModal(null)} onSave={handleSave} categories={categories} />
       </div>
-    </div></div>
+    </>
   );
 }
