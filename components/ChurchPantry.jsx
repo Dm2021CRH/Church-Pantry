@@ -611,26 +611,26 @@ export default function ChurchPantry() {
   const [sbOpen, setSbOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // ── Load data from Supabase ──
+  // ── Load data from Supabase (each table independent) ──
   useEffect(() => {
     async function load() {
       setLoading(true);
-      try {
-        const { data: invData } = await supabase.from("inventory").select("*");
-        if (invData) setInv(invData);
 
-        const { data: catData } = await supabase.from("categories").select("*");
-        if (catData && catData.length > 0) setCategories(catData.map(c => c.name).sort());
+      // Inventory (required)
+      try { const { data } = await supabase.from("inventory").select("*"); if (data) setInv(data); } catch (e) { console.error("inventory:", e); }
 
-        const { data: donorData } = await supabase.from("donors").select("*");
-        if (donorData) setDonors(donorData);
+      // Categories
+      try { const { data } = await supabase.from("categories").select("*"); if (data && data.length > 0) setCategories(data.map(c => c.name).sort()); } catch (e) { console.error("categories:", e); }
 
-        const { data: recipData } = await supabase.from("recipients").select("*");
-        if (recipData) setRecip(recipData);
+      // Donors (may not exist yet)
+      try { const { data } = await supabase.from("donors").select("*"); if (data) setDonors(data); } catch (e) { console.log("donors table not ready"); }
 
-        const { data: msgData } = await supabase.from("messages").select("*");
-        if (msgData) setMessages(msgData);
-      } catch (err) { console.error("Load error:", err); }
+      // Recipients (may not exist yet)
+      try { const { data } = await supabase.from("recipients").select("*"); if (data) setRecip(data); } catch (e) { console.log("recipients table not ready"); }
+
+      // Messages (may not exist yet)
+      try { const { data } = await supabase.from("messages").select("*"); if (data) setMessages(data); } catch (e) { console.log("messages table not ready"); }
+
       setLoading(false);
     }
     load();
