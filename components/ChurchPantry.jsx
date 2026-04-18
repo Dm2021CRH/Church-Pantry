@@ -238,17 +238,22 @@ function ScanPage({addItem, cats}) {
   const [msg,setMsg]=useState("");
   const [scanning,setScanning]=useState(false);
   const [scanError,setScanError]=useState("");
+  const [photoScanning,setPhotoScanning]=useState(false);
   const scannerRef=useRef(null);
+  const fileInputRef=useRef(null);
   const scanRegionId="scan-region";
+  const photoRegionId="photo-region";
 
-  const startScanner=async()=>{
+  const isIOS=typeof navigator!=="undefined"&&/iPad|iPhone|iPod/.test(navigator.userAgent);
+
+  const startLiveScanner=async()=>{
     setScanError("");
     try {
       const html5Qr=new Html5Qrcode(scanRegionId);
       scannerRef.current=html5Qr;
       await html5Qr.start(
         {facingMode:"environment"},
-        {fps:10,qrbox:{width:280,height:160},aspectRatio:1.5,formatsToSupport:["UPC_A","UPC_E","EAN_13","EAN_8","CODE_128","CODE_39","QR_CODE"]},
+        {fps:10,qrbox:{width:280,height:160},aspectRatio:1.5},
         (decodedText)=>{
           setUpc(decodedText);
           setMsg("Barcode scanned: "+decodedText);
@@ -259,23 +264,35 @@ function ScanPage({addItem, cats}) {
       );
       setScanning(true);
     } catch(err) {
-      console.error("Scanner error:",err);
-      if(String(err).includes("NotAllowedError")){
-        setScanError("Camera permission denied. Please allow camera access in your browser settings, or enter the UPC manually below.");
-      } else if(String(err).includes("NotFoundError")){
-        setScanError("No camera found on this device. Please enter the UPC manually below.");
-      } else {
-        setScanError("Could not start camera. Try entering the UPC manually below.");
-      }
+      console.error("Live scanner error:",err);
+      setScanError("Live scanner didn't work on this device. Try 'Take Photo of Barcode' instead, or enter the UPC manually.");
     }
   };
 
   const stopScanner=async()=>{
-    if(scannerRef.current){
-      try{await scannerRef.current.stop();scannerRef.current=null}catch(e){}
-    }
+    if(scannerRef.current){try{await scannerRef.current.stop();scannerRef.current=null}catch(e){}}
     setScanning(false);
   };
+
+  const handlePhotoCapture=async(e)=>{
+    const file=e.target.files?.[0];
+    if(!file)return;
+    setPhotoScanning(true);setScanError("");
+    try {
+      const html5Qr=new Html5Qrcode(photoRegionId);
+      const result=await html5Qr.scanFile(file,false);
+      setUpc(result);
+      setMsg("Barcode scanned: "+result);
+      setTimeout(()=>setMsg(""),3000);
+    } catch(err) {
+      console.error("Photo scan error:",err);
+      setScanError("Couldn't read a barcode from that photo. Try again with better lighting, or enter the UPC manually below.");
+    }
+    setPhotoScanning(false);
+    e.target.value="";
+  };
+
+  const openPhotoCapture=()=>{if(fileInputRef.current)fileInputRef.current.click()};
 
   useEffect(()=>{return()=>{if(scannerRef.current){scannerRef.current.stop().catch(()=>{})}}},[]);
 
@@ -291,15 +308,25 @@ function ScanPage({addItem, cats}) {
       <h3 className="cd-tt" style={{marginBottom:16}}>Barcode Scanner</h3>
 
       {!scanning ? (
-        <div style={{background:"var(--bg)",borderRadius:"var(--r)",padding:30,textAlign:"center",border:"2px dashed var(--bd)"}}>
+        <div style={{background:"var(--bg)",borderRadius:"var(--r)",padding:24,textAlign:"center",border:"2px dashed var(--bd)"}}>
           <Icons.Scan/>
-          <p style={{color:"var(--tx3)",fontSize:14,margin:"12px 0"}}>Scan a barcode with your camera or type the UPC below</p>
-          <button className="bt bt-p" onClick={startScanner} style={{marginTop:8}}><Icons.Scan/> Open Camera Scanner</button>
+          <p style={{color:"var(--tx3)",fontSize:14,margin:"12px 0 16px"}}>Choose how to capture the barcode</p>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap",justifyContent:"center"}}>
+            <button className="bt bt-p" onClick={openPhotoCapture} disabled={photoScanning}>
+              {photoScanning?"Reading...":<>📷 Take Photo of Barcode</>}
+            </button>
+            {!isIOS&&<button className="bt bt-s" onClick={startLiveScanner}><Icons.Scan/> Live Scanner</button>}
+          </div>
+          <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoCapture} style={{display:"none"}}/>
+          <p style={{fontSize:11,color:"var(--tx3)",marginTop:14}}>
+            {isIOS?"Take a clear photo of the barcode. The scanner will read it automatically.":"Live scanner works on desktop and Android. iPhone users should use 'Take Photo' for best results."}
+          </p>
           <div id={scanRegionId} style={{display:"none"}}></div>
+          <div id={photoRegionId} style={{display:"none"}}></div>
         </div>
       ) : (
         <div>
-          <div id={scanRegionId} style={{borderRadius:"var(--rs)",overflow:"hidden",marginBottom:12}}></div>
+          <div id={scanRegionId} style={{borderRadius:"var(--rs)",overflow:"hidden",marginBottom:12,minHeight:240,background:"#000"}}></div>
           <div style={{display:"flex",gap:8,justifyContent:"center"}}>
             <button className="bt bt-s bt-sm" onClick={stopScanner}>Stop Scanner</button>
           </div>
@@ -313,7 +340,7 @@ function ScanPage({addItem, cats}) {
         <label className="fl">UPC Code</label>
         <input className="fi" value={upc} onChange={e=>setUpc(e.target.value)} placeholder="Scanned automatically or type manually"/>
       </div>
-      {upc&&<div style={{padding:8,background:"var(--gn-s)",borderRadius:6,fontSize:13,color:"var(--gn)",fontWeight:600,textAlign:"center"}}>UPC: {upc}</div>}
+      {upc&&<div style={{padding:8,background:"var(--gn-s)",borderRadius:6,fontSize:13,color:"var(--gn)",fontWeight:600,textAlign:"center"}}>✓ UPC: {upc}</div>}
     </div>
 
     <div className="cd"><h3 className="cd-tt" style={{marginBottom:16}}>Item Details</h3>
