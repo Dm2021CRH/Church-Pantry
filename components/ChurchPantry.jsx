@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabase } from "../lib/supabase";
-
+import { Html5Qrcode } from "html5-qrcode";
 /* ═══════════════════════════════════════════
    CHURCH PANTRY — Supabase + Blue Theme + Editable Categories + Export
    ═══════════════════════════════════════════
@@ -233,19 +233,104 @@ function InventoryPage({inv, cats, search, setSearch, selected, handleSelectAll,
 }
 
 function ScanPage({addItem, cats}) {
-  const [upc,setUpc]=useState("");const [form,setForm]=useState({name:"",category:cats[0]||"",qty:1,price:"",expiry:"",location:""});const [msg,setMsg]=useState("");
-  const submit=()=>{if(!form.name){setMsg("Name is required");return;}addItem({upc:upc||"",name:form.name,category:form.category,qty:Number(form.qty),price:Number(form.price)||0,expiry:form.expiry||"2027-01-01",location:form.location,added_by:"Manager",added_date:new Date().toISOString().slice(0,10)});setMsg("Item added!");setUpc("");setForm({name:"",category:cats[0]||"",qty:1,price:"",expiry:"",location:""});setTimeout(()=>setMsg(""),2000)};
+  const [upc,setUpc]=useState("");
+  const [form,setForm]=useState({name:"",category:cats[0]||"",qty:1,price:"",expiry:"",location:""});
+  const [msg,setMsg]=useState("");
+  const [scanning,setScanning]=useState(false);
+  const [scanError,setScanError]=useState("");
+  const scannerRef=useRef(null);
+  const scanRegionId="scan-region";
+
+  const startScanner=async()=>{
+    setScanError("");
+    try {
+      const html5Qr=new Html5Qrcode(scanRegionId);
+      scannerRef.current=html5Qr;
+      await html5Qr.start(
+        {facingMode:"environment"},
+        {fps:10,qrbox:{width:280,height:160},aspectRatio:1.5,formatsToSupport:["UPC_A","UPC_E","EAN_13","EAN_8","CODE_128","CODE_39","QR_CODE"]},
+        (decodedText)=>{
+          setUpc(decodedText);
+          setMsg("Barcode scanned: "+decodedText);
+          setTimeout(()=>setMsg(""),3000);
+          html5Qr.stop().then(()=>{scannerRef.current=null;setScanning(false)}).catch(()=>{});
+        },
+        ()=>{}
+      );
+      setScanning(true);
+    } catch(err) {
+      console.error("Scanner error:",err);
+      if(String(err).includes("NotAllowedError")){
+        setScanError("Camera permission denied. Please allow camera access in your browser settings, or enter the UPC manually below.");
+      } else if(String(err).includes("NotFoundError")){
+        setScanError("No camera found on this device. Please enter the UPC manually below.");
+      } else {
+        setScanError("Could not start camera. Try entering the UPC manually below.");
+      }
+    }
+  };
+
+  const stopScanner=async()=>{
+    if(scannerRef.current){
+      try{await scannerRef.current.stop();scannerRef.current=null}catch(e){}
+    }
+    setScanning(false);
+  };
+
+  useEffect(()=>{return()=>{if(scannerRef.current){scannerRef.current.stop().catch(()=>{})}}},[]);
+
+  const submit=()=>{
+    if(!form.name){setMsg("Name is required");return;}
+    addItem({upc:upc||"",name:form.name,category:form.category,qty:Number(form.qty),price:Number(form.price)||0,expiry:form.expiry||"2027-01-01",location:form.location,added_by:"Manager",added_date:new Date().toISOString().slice(0,10)});
+    setMsg("Item added!");setUpc("");setForm({name:"",category:cats[0]||"",qty:1,price:"",expiry:"",location:""});
+    setTimeout(()=>setMsg(""),2000);
+  };
+
   return(<div className="fu" style={{maxWidth:600}}>
-    <div className="cd" style={{marginBottom:20}}><h3 className="cd-tt" style={{marginBottom:16}}>Barcode Scanner</h3><div style={{background:"var(--bg)",borderRadius:"var(--r)",padding:40,textAlign:"center",border:"2px dashed var(--bd)"}}><Icons.Scan/><p style={{color:"var(--tx3)",fontSize:14,margin:"12px 0"}}>Point camera at barcode or enter UPC manually</p></div><div className="fg" style={{marginTop:16}}><label className="fl">UPC Code</label><input className="fi" value={upc} onChange={e=>setUpc(e.target.value)} placeholder="Enter or scan UPC"/></div></div>
+    <div className="cd" style={{marginBottom:20}}>
+      <h3 className="cd-tt" style={{marginBottom:16}}>Barcode Scanner</h3>
+
+      {!scanning ? (
+        <div style={{background:"var(--bg)",borderRadius:"var(--r)",padding:30,textAlign:"center",border:"2px dashed var(--bd)"}}>
+          <Icons.Scan/>
+          <p style={{color:"var(--tx3)",fontSize:14,margin:"12px 0"}}>Scan a barcode with your camera or type the UPC below</p>
+          <button className="bt bt-p" onClick={startScanner} style={{marginTop:8}}><Icons.Scan/> Open Camera Scanner</button>
+          <div id={scanRegionId} style={{display:"none"}}></div>
+        </div>
+      ) : (
+        <div>
+          <div id={scanRegionId} style={{borderRadius:"var(--rs)",overflow:"hidden",marginBottom:12}}></div>
+          <div style={{display:"flex",gap:8,justifyContent:"center"}}>
+            <button className="bt bt-s bt-sm" onClick={stopScanner}>Stop Scanner</button>
+          </div>
+          <p style={{fontSize:12,color:"var(--tx3)",textAlign:"center",marginTop:8}}>Point your camera at a barcode. It will scan automatically.</p>
+        </div>
+      )}
+
+      {scanError&&<div style={{marginTop:12,padding:12,background:"var(--yl-s)",borderRadius:8,fontSize:13,color:"var(--yl)"}}>{scanError}</div>}
+
+      <div className="fg" style={{marginTop:16}}>
+        <label className="fl">UPC Code</label>
+        <input className="fi" value={upc} onChange={e=>setUpc(e.target.value)} placeholder="Scanned automatically or type manually"/>
+      </div>
+      {upc&&<div style={{padding:8,background:"var(--gn-s)",borderRadius:6,fontSize:13,color:"var(--gn)",fontWeight:600,textAlign:"center"}}>UPC: {upc}</div>}
+    </div>
+
     <div className="cd"><h3 className="cd-tt" style={{marginBottom:16}}>Item Details</h3>
       <div className="fg"><label className="fl">Item Name *</label><input className="fi" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/></div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}><div className="fg"><label className="fl">Category</label><select className="fi" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>{cats.map(c=><option key={c} value={c}>{c}</option>)}</select></div><div className="fg"><label className="fl">Quantity</label><input className="fi" type="number" min="1" value={form.qty} onChange={e=>setForm(f=>({...f,qty:e.target.value}))}/></div><div className="fg"><label className="fl">Price ($)</label><input className="fi" type="number" step="0.01" value={form.price} onChange={e=>setForm(f=>({...f,price:e.target.value}))}/></div><div className="fg"><label className="fl">Expiry Date</label><input className="fi" type="date" value={form.expiry} onChange={e=>setForm(f=>({...f,expiry:e.target.value}))}/></div></div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div className="fg"><label className="fl">Category</label><select className="fi" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>{cats.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+        <div className="fg"><label className="fl">Quantity</label><input className="fi" type="number" min="1" value={form.qty} onChange={e=>setForm(f=>({...f,qty:e.target.value}))}/></div>
+        <div className="fg"><label className="fl">Price ($)</label><input className="fi" type="number" step="0.01" value={form.price} onChange={e=>setForm(f=>({...f,price:e.target.value}))}/></div>
+        <div className="fg"><label className="fl">Expiry Date</label><input className="fi" type="date" value={form.expiry} onChange={e=>setForm(f=>({...f,expiry:e.target.value}))}/></div>
+      </div>
       <div className="fg"><label className="fl">Location</label><input className="fi" value={form.location} onChange={e=>setForm(f=>({...f,location:e.target.value}))} placeholder="e.g. Shelf A2"/></div>
       <button className="bt bt-p" style={{width:"100%",justifyContent:"center"}} onClick={submit}><Icons.Plus/> Add to Inventory</button>
       {msg&&<div style={{marginTop:10,padding:10,background:"var(--gn-s)",borderRadius:8,color:"var(--gn)",fontWeight:600,textAlign:"center",fontSize:13}}>{msg}</div>}
     </div>
   </div>);
 }
+
 
 function BagGoPage({inv, recip, setInv, triggerSync}) {
   const [fSize,setFSize]=useState(4);const [diet,setDiet]=useState("");const [selR,setSelR]=useState("");const [bag,setBag]=useState(null);const [packed,setPacked]=useState(false);
