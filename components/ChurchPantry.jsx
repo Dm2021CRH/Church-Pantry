@@ -239,6 +239,8 @@ function ScanPage({addItem, cats}) {
   const [scanning,setScanning]=useState(false);
   const [scanError,setScanError]=useState("");
   const [photoScanning,setPhotoScanning]=useState(false);
+  const [previewImg,setPreviewImg]=useState(null);
+  const [scanStatus,setScanStatus]=useState("");
   const scannerRef=useRef(null);
   const fileInputRef=useRef(null);
   const scanRegionId="scan-region";
@@ -255,16 +257,13 @@ function ScanPage({addItem, cats}) {
         {facingMode:"environment"},
         {fps:10,qrbox:{width:280,height:160},aspectRatio:1.5},
         (decodedText)=>{
-          setUpc(decodedText);
-          setMsg("Barcode scanned: "+decodedText);
-          setTimeout(()=>setMsg(""),3000);
+          setUpc(decodedText);setMsg("Barcode scanned: "+decodedText);setTimeout(()=>setMsg(""),3000);
           html5Qr.stop().then(()=>{scannerRef.current=null;setScanning(false)}).catch(()=>{});
         },
         ()=>{}
       );
       setScanning(true);
     } catch(err) {
-      console.error("Live scanner error:",err);
       setScanError("Live scanner didn't work on this device. Try 'Take Photo of Barcode' instead, or enter the UPC manually.");
     }
   };
@@ -274,32 +273,82 @@ function ScanPage({addItem, cats}) {
     setScanning(false);
   };
 
+  const processImageVariants=async(file)=>{
+    const variants=[];
+    const imgUrl=URL.createObjectURL(file);
+    const img=await new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=reject;im.src=imgUrl});
+    setPreviewImg(imgUrl);
+
+    const makeCanvas=(w,h,drawFn)=>{const c=document.createElement("canvas");c.width=w;c.height=h;const ctx=c.getContext("2d");drawFn(ctx,c);return c};
+
+    variants.push({label:"Original",canvas:makeCanvas(img.width,img.height,(ctx)=>{ctx.drawImage(img,0,0)})});
+
+    const cropW=img.width*0.8,cropH=img.height*0.5,cropX=(img.width-cropW)/2,cropY=(img.height-cropH)/2;
+    variants.push({label:"Center crop",canvas:makeCanvas(cropW,cropH,(ctx)=>{ctx.drawImage(img,cropX,cropY,cropW,cropH,0,0,cropW,cropH)})});
+
+    variants.push({label:"High contrast",canvas:makeCanvas(img.width,img.height,(ctx,c)=>{
+      ctx.drawImage(img,0,0);
+      const d=ctx.getImageData(0,0,c.width,c.height);const p=d.data;
+      for(let i=0;i<p.length;i+=4){const avg=(p[i]+p[i+1]+p[i+2])/3;const v=avg>128?255:0;p[i]=p[i+1]=p[i+2]=v}
+      ctx.putImageData(d,0,0);
+    })});
+
+    variants.push({label:"Rotated 90°",canvas:makeCanvas(img.height,img.width,(ctx,c)=>{ctx.translate(c.width/2,c.height/2);ctx.rotate(Math.PI/2);ctx.drawImage(img,-img.width/2,-img.height/2)})});
+
+    variants.push({label:"Cropped + contrast",canvas:makeCanvas(cropW,cropH,(ctx,c)=>{
+      ctx.drawImage(img,cropX,cropY,cropW,cropH,0,0,cropW,cropH);
+      const d=ctx.getImageData(0,0,c.width,c.height);const p=d.data;
+      for(let i=0;i<p.length;i+=4){const avg=(p[i]+p[i+1]+p[i+2])/3;const v=avg>128?255:0;p[i]=p[i+1]=p[i+2]=v}
+      ctx.putImageData(d,0,0);
+    })});
+
+    return {variants,cleanup:()=>URL.revokeObjectURL(imgUrl)};
+  };
+
+  const tryScanCanvas=(canvas)=>new Promise((resolve,reject)=>{
+    canvas.toBlob(async(blob)=>{
+      if(!blob){reject("no blob");return}
+      try{const html5Qr=new Html5Qrcode(photoRegionId);const result=await html5Qr.scanFile(new File([blob],"scan.png",{type:"image/png"}),false);resolve(result)}
+      catch(err){reject(err)}
+    },"image/png");
+  });
+
   const handlePhotoCapture=async(e)=>{
     const file=e.target.files?.[0];
     if(!file)return;
-    setPhotoScanning(true);setScanError("");
+    setPhotoScanning(true);setScanError("");setScanStatus("Processing image...");
+
     try {
-      const html5Qr=new Html5Qrcode(photoRegionId);
-      const result=await html5Qr.scanFile(file,false);
-      setUpc(result);
-      setMsg("Barcode scanned: "+result);
-      setTimeout(()=>setMsg(""),3000);
+      const {variants,cleanup}=await processImageVariants(file);
+      let found=null;
+      for(const v of variants){
+        setScanStatus(`Trying: ${v.label}...`);
+        try{const result=await tryScanCanvas(v.canvas);found=result;break}catch(err){}
+      }
+      cleanup();
+
+      if(found){setUpc(found);setMsg("Barcode scanned: "+found);setScanStatus("");setTimeout(()=>setMsg(""),3000)}
+      else {
+        setScanError("Couldn't read the barcode. Tips: (1) Hold phone steady and parallel to the barcode. (2) Make sure barcode fills most of the frame. (3) Avoid shadows and glare. (4) Try good lighting. Or enter the UPC manually below.");
+        setScanStatus("");
+      }
     } catch(err) {
-      console.error("Photo scan error:",err);
-      setScanError("Couldn't read a barcode from that photo. Try again with better lighting, or enter the UPC manually below.");
+      setScanError("Error processing the image. Please try again or enter the UPC manually.");
+      setScanStatus("");
     }
+
     setPhotoScanning(false);
     e.target.value="";
   };
 
-  const openPhotoCapture=()=>{if(fileInputRef.current)fileInputRef.current.click()};
+  const openPhotoCapture=()=>{setPreviewImg(null);setScanError("");if(fileInputRef.current)fileInputRef.current.click()};
 
   useEffect(()=>{return()=>{if(scannerRef.current){scannerRef.current.stop().catch(()=>{})}}},[]);
 
   const submit=()=>{
     if(!form.name){setMsg("Name is required");return;}
     addItem({upc:upc||"",name:form.name,category:form.category,qty:Number(form.qty),price:Number(form.price)||0,expiry:form.expiry||"2027-01-01",location:form.location,added_by:"Manager",added_date:new Date().toISOString().slice(0,10)});
-    setMsg("Item added!");setUpc("");setForm({name:"",category:cats[0]||"",qty:1,price:"",expiry:"",location:""});
+    setMsg("Item added!");setUpc("");setForm({name:"",category:cats[0]||"",qty:1,price:"",expiry:"",location:""});setPreviewImg(null);
     setTimeout(()=>setMsg(""),2000);
   };
 
@@ -310,31 +359,27 @@ function ScanPage({addItem, cats}) {
       {!scanning ? (
         <div style={{background:"var(--bg)",borderRadius:"var(--r)",padding:24,textAlign:"center",border:"2px dashed var(--bd)"}}>
           <Icons.Scan/>
-          <p style={{color:"var(--tx3)",fontSize:14,margin:"12px 0 16px"}}>Choose how to capture the barcode</p>
+          <p style={{color:"var(--tx3)",fontSize:14,margin:"12px 0 8px"}}>Take a close-up photo of the barcode</p>
+          <p style={{color:"var(--tx3)",fontSize:12,margin:"0 0 16px"}}>Fill the frame. Avoid glare. Keep it parallel.</p>
           <div style={{display:"flex",gap:10,flexWrap:"wrap",justifyContent:"center"}}>
             <button className="bt bt-p" onClick={openPhotoCapture} disabled={photoScanning}>
-              {photoScanning?"Reading...":<>📷 Take Photo of Barcode</>}
+              {photoScanning?scanStatus||"Reading...":<>📷 Take Photo of Barcode</>}
             </button>
             {!isIOS&&<button className="bt bt-s" onClick={startLiveScanner}><Icons.Scan/> Live Scanner</button>}
           </div>
           <input ref={fileInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoCapture} style={{display:"none"}}/>
-          <p style={{fontSize:11,color:"var(--tx3)",marginTop:14}}>
-            {isIOS?"Take a clear photo of the barcode. The scanner will read it automatically.":"Live scanner works on desktop and Android. iPhone users should use 'Take Photo' for best results."}
-          </p>
+          {previewImg&&<div style={{marginTop:14}}><img src={previewImg} alt="Captured" style={{maxWidth:"100%",maxHeight:200,borderRadius:8,border:"1px solid var(--bd)"}}/><p style={{fontSize:11,color:"var(--tx3)",marginTop:4}}>Last photo taken</p></div>}
           <div id={scanRegionId} style={{display:"none"}}></div>
           <div id={photoRegionId} style={{display:"none"}}></div>
         </div>
       ) : (
         <div>
           <div id={scanRegionId} style={{borderRadius:"var(--rs)",overflow:"hidden",marginBottom:12,minHeight:240,background:"#000"}}></div>
-          <div style={{display:"flex",gap:8,justifyContent:"center"}}>
-            <button className="bt bt-s bt-sm" onClick={stopScanner}>Stop Scanner</button>
-          </div>
-          <p style={{fontSize:12,color:"var(--tx3)",textAlign:"center",marginTop:8}}>Point your camera at a barcode. It will scan automatically.</p>
+          <div style={{display:"flex",gap:8,justifyContent:"center"}}><button className="bt bt-s bt-sm" onClick={stopScanner}>Stop Scanner</button></div>
         </div>
       )}
 
-      {scanError&&<div style={{marginTop:12,padding:12,background:"var(--yl-s)",borderRadius:8,fontSize:13,color:"var(--yl)"}}>{scanError}</div>}
+      {scanError&&<div style={{marginTop:12,padding:12,background:"var(--yl-s)",borderRadius:8,fontSize:13,color:"var(--yl)",lineHeight:1.5}}>{scanError}</div>}
 
       <div className="fg" style={{marginTop:16}}>
         <label className="fl">UPC Code</label>
@@ -357,6 +402,7 @@ function ScanPage({addItem, cats}) {
     </div>
   </div>);
 }
+
 
 
 function BagGoPage({inv, recip, setInv, triggerSync}) {
